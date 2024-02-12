@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+//#include <unistd.h> this was causing an error for me, is it because im on windows?
 #include <string.h>
-
 
 // Compile with -DREALMALLOC to use the real malloc() instead of mymalloc()
 #ifndef REALMALLOC
@@ -16,6 +15,7 @@
 
 int main(int argc, char **argv)
 {
+
 	char *obj[OBJECTS];
 	int i, j, errors = 0;
 	
