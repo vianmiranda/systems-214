@@ -19,20 +19,27 @@
 
 // Allocated memory from global array
 #define MEMLENGTH  512
-static double memory[MEM_SIZE];
+static double memory[MEMLENGTH];
 
-typedef struct {
-    chunckheader header;
-    chunkpayload payload;
-} chunk;
+enum allocation_status {
+    FREE,
+    TAKEN
+};
 
+/*--------------------------------------------------*/
 typedef struct {
     size_t size;
     int is_allocated;
     // chunkheader* next;
 } chunkheader;
 
-typedef void chunkpayload;
+typedef char chunkpayload;
+
+typedef struct {
+    chunkheader header;
+    chunkpayload payload;
+} chunk;
+
 
 // Checks first int for the size of the header
 size_t getChunkSize(chunkheader* head) {
@@ -41,22 +48,27 @@ size_t getChunkSize(chunkheader* head) {
 
 // Set the size of a chunk
 void setChunkSize(chunkheader* head, size_t size) {
-    head->size = ROUNDUP8(size) + HEADER_SIZE;
+    head->size = size + HEADER_SIZE;
 }
 
 // Checks second int for the allocation status
+// Returns 1 for taken, 0 for free
 int getAllocationStatus(chunkheader* head) {
-    return head->is_allocated == 0;
+    return head->is_allocated == TAKEN;
 }
 
 // Marks as either 0 for free
 void setFree(chunkheader* head) {
-    head->is_allocated = 0;
+    head->is_allocated = FREE;
 }
 
 // Marks as either 1 for taken
 void setAllocated(chunkheader* head) {
-    head->is_allocated = 1;
+    head->is_allocated = TAKEN;
+}
+
+chunkpayload* getPayload(chunkheader* head) {
+    return (chunkpayload*)(((char*)head) + HEADER_SIZE);
 }
 
 // Returns the pointer to the next chunk
@@ -66,7 +78,52 @@ chunk* getNextChunk(chunkheader* head) {
 
 
 void* mymalloc(size_t size, char* file, int line) {
+    if (size == 0) {
+        fprintf(stderr, "Error: Cannot allocate 0 bytes @ File: %s, Line: %d\n", file, line);
+        return NULL;
+    }
+    size = ROUNDUP8(size);
 
+    // Get first chunkheader
+    chunkheader* start = (chunkheader*) memory;
+    
+    // Initialize memory
+    size_t memory = (MEMLENGTH * sizeof(double) - HEADER_SIZE);
+    if (getAllocationStatus(start) == 0 && getChunkSize(start) == 0) {
+        setChunkSize(start, memory);
+        setFree(start);
+    }
+    int currByte = 0;
+    size_t neededSize = size + HEADER_SIZE;
+
+    
+    while (currByte < memory) {
+        size_t originalChunkSize = getChunkSize(start);
+        if (getAllocationStatus(start) == FREE && originalChunkSize >= neededSize) {
+            size_t newChunkSize = originalChunkSize - neededSize;
+            size_t remainingChunkSize = originalChunkSize - newChunkSize;
+
+            // Allocate the chunk of needed size
+            setChunkSize(start, size);
+            setAllocated(start);
+
+            // If there is remaining space from the original size, update the next chunk's size
+            if (remainingChunkSize > 0) {
+                chunk* nextChunk = getNextChunk(start);
+                setChunkSize(nextChunk, remainingChunkSize - HEADER_SIZE);
+            }
+
+            return getPayload(start);
+        }
+        else {
+            // Iterate to the next available chunk
+            currByte += getChunkSize(start);
+            start = getNextChunk(start);
+        }
+    }
+    
+    fprintf(stderr, "Error: insufficient memory @ File: %s, Line: %d\n", file, line);
+    return NULL;
 }
 
 
