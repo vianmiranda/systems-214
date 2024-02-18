@@ -12,8 +12,8 @@
 //makes sure size is rounded to nearest multiple of 8
 #define ROUNDUP8(x) (((x)+7) & (-8))
 
-// define metadata size (int for size and int for allocation status 1 or 0)
-#define METADATA_SIZE sizeof(int)*2
+// define header size (int for size and int for allocation status 1 or 0)
+#define HEADER_SIZE sizeof(int)*2
 
 //define memory block 
 static double memory[MEM_SIZE];
@@ -22,7 +22,7 @@ int getChunkSize(void* head) {
   return *((size_t*)head);
 }
 
-int isFree(void* head) {
+int isChunkFree(void* head) {
   return *(((int*)head) + 1) == 0;
 }
 
@@ -34,24 +34,19 @@ void setChunkSize(void* head, size_t size) {
   *((int*) head) = size + 8;
 }
 
-void setNextChunkSize(void* head, size_t size) {
-  *((int*) head + getChunkSize(head)) = size;
+int* getNextChunk(void* head) {
+  return ((int*)head) + *((int*)head) / 4;
 }
 
-int nextChunkIsUnitialized(void* head) {
-  *((int*)head + getChunkSize(head)) = 0;
+void setFree(void* head) {
+  return *((int*)head + 1) = 0;
 }
-
-void* getNextChunk(void* head) {
-  return (void*)((int*)head + getChunkSize(head));
-}
-
 
 
 
 void* mymalloc(size_t size, char* file, int line) {
     if (size == 0) {
-        //print error msg
+        fprintf(stderr, "Cannot allocate 0 bytes @ File: %s, Line: %d\n", file, line);
         return NULL;
     }
     size = ROUNDUP8(size);
@@ -59,37 +54,58 @@ void* mymalloc(size_t size, char* file, int line) {
     int* head = (int*) memory;
     void* res;
 
-    int byteNum = 0;
-    while(byteNum < MEM_SIZE*8) {
-      int chunkSize = getChunkSize(head);
-      int isFree = isChunkFree(head);
+    //initialize
+    if (getChunkSize(head) == 0 && isChunkFree(head)) {
+      *head = (MEM_SIZE*8);
+      setFree(head);
+    }
 
-      if (chunkSize == 0 && isFree == 0) {
-        setChunkSize(head, size + 8);
-        markAsAllocated(head);
-        res = head + 8;
-        isFree = 1;
-        setNextChunkSize(head, MEM_SIZE*8 - (head + size + 8));
-        return res;
-      }
+    int byte = 0;
 
-      if (isFree == 0 && chunkSize >= size + 8) {
-        setChunkSize(head, size + 8);
-        markAsAllocated(head);
-        res = head + 8;
-        if (nextChunkIsUnitialized(head) == 1) {
-          setNextChunkSize(head, chunkSize - (size + 8));
+    while(byte < MEM_SIZE*8) {
+
+        int isFree = isChunkFree(head);
+
+        /*if size < current chunksize and is free, allocate
+
+         */
+        if (size <= getChunkSize(head)-HEADER_SIZE && isChunkFree(head)) {
+
+          //keep track of the size of the original chunk before allocation
+          int originalchunksize = getChunkSize(head);
+
+          //update current chunk to match the size requested and mark as allocated
+          setChunkSize(head, size);
+          markAsAllocated(head);
+
+          //set pointer to payload (+2 because first 2 integers (8 bytes) is used for size(4 bytes) and free status (4 bytes))
+          res = (void*)(head + 2);
+
+          //if there is still space after allocation adjust space of next chunk
+          // originalchunksize - getChunkSize(head) - 8 --> subtract the size of the allocated portion and the
+            // header from the original chunk size
+          if (originalchunksize > getChunkSize(head)) {
+            setChunkSize(getNextChunk(head), originalchunksize - getChunkSize(head) - 8);
+            setFree(getNextChunk(head));
+          } 
+
           return res;
+        } else {
+          //iterate to the next available chunk
+          byte += getChunkSize(head);
+          head = getNextChunk(head);
         }
-      }
 
-      if (isFree == 1 || chunkSize < size + 8) {
-        head = getNextChunk(head);
-      }
+        //otherwise there is not enough memory
+        fprintf(stderr, "Error: no more memory @ File: %s, Line: %d\n", file, line);
+        return NULL;
+
+
+    }
 
       //print error msg
 
-    }
+    
 }
 
 
