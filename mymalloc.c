@@ -10,7 +10,7 @@
 */
 
 //makes sure size is rounded to nearest multiple of 8
-#define ROUNDUP8(x) (((x)+7) & (~7))
+#define ROUNDUP8(x) (((x)+7) & (-8))
 
 // define metadata size (int for size and int for allocation status 1 or 0)
 #define METADATA_SIZE sizeof(int)*2
@@ -18,34 +18,94 @@
 //define memory block 
 static double memory[MEM_SIZE];
 
-
-
-//create a struct for the chunk header. this will act as a LL to move from one chunk to next available chunk
-typedef struct chunkheader {
-  size_t size;
-  int is_allocated; //int can be represented as true/false
-  struct chunckheader* next;
-} chunkheader;
-
-//initially, list of free chunks is null
-chunkheader* free_chunk_list = NULL;
-
-
-//method to initialize memory and LL
-void initialize_memory() {
-  free_chunk_list = (chunkheader*)memory;
-  free_chunk_list->size = MEM_SIZE - METADATA_SIZE;
-  free_chunk_list->is_allocated = 0;
-  free_chunk_list->next = NULL;
+int getChunkSize(void* head) {
+  return *((size_t*)head);
 }
 
-/*
-instructions:
-  1. search for free chunk of memory containing >= requested bytes to be allocated
-  2. if chunk is large enough, you may divide the chunk into 2, 1st large enough for request
-     (and return pointer to it) and 2nd remains free
-*/
+int isFree(void* head) {
+  return *(((int*)head) + 1) == 0;
+}
 
+void markAsAllocated(void* head) {
+  *(((int*)head) + 1) = 1;
+}
+
+void setChunkSize(void* head, size_t size) {
+  *((int*) head) = size + 8;
+}
+
+void setNextChunkSize(void* head, size_t size) {
+  *((int*) head + getChunkSize(head)) = size;
+}
+
+int nextChunkIsUnitialized(void* head) {
+  *((int*)head + getChunkSize(head)) = 0;
+}
+
+void* getNextChunk(void* head) {
+  return (void*)((int*)head + getChunkSize(head));
+}
+
+
+
+
+void* mymalloc(size_t size, char* file, int line) {
+    if (size == 0) {
+        //print error msg
+        return NULL;
+    }
+    size = ROUNDUP8(size);
+
+    int* head = (int*) memory;
+    void* res;
+
+    int byteNum = 0;
+    while(byteNum < MEM_SIZE*8) {
+      int chunkSize = getChunkSize(head);
+      int isFree = isChunkFree(head);
+
+      if (chunkSize == 0 && isFree == 0) {
+        setChunkSize(head, size + 8);
+        markAsAllocated(head);
+        res = head + 8;
+        isFree = 1;
+        setNextChunkSize(head, MEM_SIZE*8 - (head + size + 8));
+        return res;
+      }
+
+      if (isFree == 0 && chunkSize >= size + 8) {
+        setChunkSize(head, size + 8);
+        markAsAllocated(head);
+        res = head + 8;
+        if (nextChunkIsUnitialized(head) == 1) {
+          setNextChunkSize(head, chunkSize - (size + 8));
+          return res;
+        }
+      }
+
+      if (isFree == 1 || chunkSize < size + 8) {
+        head = getNextChunk(head);
+      }
+
+      //print error msg
+
+    }
+}
+
+
+
+/*
+errors to detect:
+1. freeing a chunk that was not malloced
+2. not freeing at the start of the chunk
+3. calling free a 2nd time on the same pointer
+*/
+void myfree(void *ptr, char *file, int line) {
+}
+
+
+
+/*
 
 void* mymalloc(size_t size, char *file, int line) {
 
@@ -70,7 +130,7 @@ void* mymalloc(size_t size, char *file, int line) {
     //check if chunk is large enough (1)
     if (!current->is_allocated && current->size >= size) {
       //if there is enough space, split chunk (2)
-      if (current->size > size + sizeof(chunkheader)) {
+      if (isLargeEnough(current, size)) {
         //adding sizeof(chunkheader) because metadata needs space in the chunk
         chunkheader* nextchunk = (chunkheader*)((char*)current + size + sizeof(chunkheader));
         nextchunk->size = current->size - size - sizeof(chunkheader);
@@ -106,14 +166,41 @@ void* mymalloc(size_t size, char *file, int line) {
 
 
 
-/*
-errors to detect:
-1. freeing a chunk that was not malloced
-2. not freeing at the start of the chunk
-3. calling free a 2nd time on the same pointer
+
 */
-void myfree(void *ptr, char *file, int line) {
-}
 
 
 
+// //create a struct for the chunk header. this will act as a LL to move from one chunk to next available chunk
+// typedef struct chunkheader {
+//   size_t size;
+//   int is_allocated; //int can be represented as true/false
+//   struct chunckheader* next;
+// } chunkheader;
+
+// //initially, list of free chunks is null
+// chunkheader* free_chunk_list = NULL;
+
+
+// //method to initialize memory and LL
+// void initialize_memory() {
+//   free_chunk_list = (chunkheader*)memory;
+//   free_chunk_list->size = MEM_SIZE - METADATA_SIZE;
+//   free_chunk_list->is_allocated = 0;
+//   free_chunk_list->next = NULL;
+// }
+
+// /*
+// instructions:
+//   1. search for free chunk of memory containing >= requested bytes to be allocated
+//   2. if chunk is large enough, you may divide the chunk into 2, 1st large enough for request
+//      (and return pointer to it) and 2nd remains free
+// */
+
+// //checks if chunk is large enough and not already allocated
+// int isLargeEnough(chunkheader* curr, size_t size) {
+//   if (!curr->is_allocated && curr->size >= size) {
+//     return 1;
+//   }
+//   return 0;
+// }
