@@ -9,115 +9,141 @@
 
 */
 
-//makes sure size is rounded to nearest multiple of 8
-#define ROUNDUP8(x) (((x)+7) & (-8))
+// Makes sure size is rounded to nearest multiple of 8
+#define ROUNDUP8(x) (((x)+7) & (~7))
 
-// define header size (int for size and int for allocation status 1 or 0)
-#define HEADER_SIZE sizeof(int)*2
+// Define metadata size 
+// 1. int for size 
+// 2. int for allocation status, either 1 for taken or 0 for free
+#define HEADER_SIZE (sizeof(int)*2)
 
-//define memory block 
+// Allocated memory from global array
+#define MEMLENGTH  512
 static double memory[MEM_SIZE];
 
-int getChunkSize(void* head) {
-  return *((size_t*)head);
+typedef struct {
+    chunckheader header;
+    chunkpayload payload;
+} chunk;
+
+typedef struct {
+    size_t size;
+    int is_allocated;
+    // chunkheader* next;
+} chunkheader;
+
+typedef void chunkpayload;
+
+// Checks first int for the size of the header
+size_t getChunkSize(chunkheader* head) {
+    return head->size;
 }
 
-int isChunkFree(void* head) {
-  return *(((int*)head) + 1) == 0;
+// Set the size of a chunk
+void setChunkSize(chunkheader* head, size_t size) {
+    head->size = ROUNDUP8(size) + HEADER_SIZE;
 }
 
-void markAsAllocated(void* head) {
-  *(((int*)head) + 1) = 1;
+// Checks second int for the allocation status
+int getAllocationStatus(chunkheader* head) {
+    return head->is_allocated == 0;
 }
 
-void setChunkSize(void* head, size_t size) {
-  *((int*) head) = size + 8;
+// Marks as either 0 for free
+void setFree(chunkheader* head) {
+    head->is_allocated = 0;
 }
 
-int* getNextChunk(void* head) {
-  return ((int*)head) + *((int*)head) / 4;
+// Marks as either 1 for taken
+void setAllocated(chunkheader* head) {
+    head->is_allocated = 1;
 }
 
-void setFree(void* head) {
-  return *((int*)head + 1) = 0;
+// Returns the pointer to the next chunk
+chunk* getNextChunk(chunkheader* head) {
+    return (chunk*)(((char*)head) + getChunkSize(head));
 }
-
 
 
 void* mymalloc(size_t size, char* file, int line) {
-    if (size == 0) {
-        fprintf(stderr, "Cannot allocate 0 bytes @ File: %s, Line: %d\n", file, line);
-        return NULL;
-    }
-    size = ROUNDUP8(size);
 
-    int* head = (int*) memory;
-    void* res;
-
-    //initialize
-    if (getChunkSize(head) == 0 && isChunkFree(head)) {
-      *head = (MEM_SIZE*8);
-      setFree(head);
-    }
-
-    int byte = 0;
-
-    while(byte < MEM_SIZE*8) {
-
-        int isFree = isChunkFree(head);
-
-        /*if size < current chunksize and is free, allocate
-
-         */
-        if (size <= getChunkSize(head)-HEADER_SIZE && isChunkFree(head)) {
-
-          //keep track of the size of the original chunk before allocation
-          int originalchunksize = getChunkSize(head);
-
-          //update current chunk to match the size requested and mark as allocated
-          setChunkSize(head, size);
-          markAsAllocated(head);
-
-          //set pointer to payload (+2 because first 2 integers (8 bytes) is used for size(4 bytes) and free status (4 bytes))
-          res = (void*)(head + 2);
-
-          //if there is still space after allocation adjust space of next chunk
-          // originalchunksize - getChunkSize(head) - 8 --> subtract the size of the allocated portion and the
-            // header from the original chunk size
-          if (originalchunksize > getChunkSize(head)) {
-            setChunkSize(getNextChunk(head), originalchunksize - getChunkSize(head) - 8);
-            setFree(getNextChunk(head));
-          } 
-
-          return res;
-        } else {
-          //iterate to the next available chunk
-          byte += getChunkSize(head);
-          head = getNextChunk(head);
-        }
-
-        //otherwise there is not enough memory
-        fprintf(stderr, "Error: no more memory @ File: %s, Line: %d\n", file, line);
-        return NULL;
+}
 
 
-    }
+// void* mymalloc(size_t size, char* file, int line) {
+//     if (size == 0) {
+//         fprintf(stderr, "Cannot allocate 0 bytes @ File: %s, Line: %d\n", file, line);
+//         return NULL;
+//     }
+//     size = ROUNDUP8(size);
 
-      //print error msg
+//     int* head = (int*) memory;
+//     void* res;
+
+//     //initialize
+//     if (getChunkSize(head) == 0 && isChunkFree(head)) {
+//       *head = (MEM_SIZE*8);
+//       setFree(head);
+//     }
+
+//     int byte = 0;
+
+//     while(byte < MEM_SIZE*8) {
+
+//         int isFree = isChunkFree(head);
+
+//         /*if size < current chunksize and is free, allocate
+
+//          */
+//         if (size <= getChunkSize(head)-HEADER_SIZE && isChunkFree(head)) {
+
+//           //keep track of the size of the original chunk before allocation
+//           int originalchunksize = getChunkSize(head);
+
+//           //update current chunk to match the size requested and mark as allocated
+//           setChunkSize(head, size);
+//           markAsAllocated(head);
+
+//           //set pointer to payload (+2 because first 2 integers (8 bytes) is used for size(4 bytes) and free status (4 bytes))
+//           res = (void*)(head + 2);
+
+//           //if there is still space after allocation adjust space of next chunk
+//           // originalchunksize - getChunkSize(head) - 8 --> subtract the size of the allocated portion and the
+//             // header from the original chunk size
+//           if (originalchunksize > getChunkSize(head)) {
+//             setChunkSize(getNextChunk(head), originalchunksize - getChunkSize(head) - 8);
+//             setFree(getNextChunk(head));
+//           } 
+
+//           return res;
+//         } else {
+//           //iterate to the next available chunk
+//           byte += getChunkSize(head);
+//           head = getNextChunk(head);
+//         }
+
+//         //otherwise there is not enough memory
+//         fprintf(stderr, "Error: no more memory @ File: %s, Line: %d\n", file, line);
+//         return NULL;
+
+
+//     }
+
+//       //print error msg
 
     
-}
+// }
 
 
 
-/*
-errors to detect:
-1. freeing a chunk that was not malloced
-2. not freeing at the start of the chunk
-3. calling free a 2nd time on the same pointer
-*/
-void myfree(void *ptr, char *file, int line) {
-}
+// /*
+// errors to detect:
+// 1. freeing a chunk that was not malloced
+// 2. not freeing at the start of the chunk
+// 3. calling free a 2nd time on the same pointer
+// */
+// void myfree(void *ptr, char *file, int line) {
+// }
 
 
 
