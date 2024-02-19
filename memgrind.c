@@ -14,7 +14,6 @@ int getTime() {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     
-    // tv.tv_sec returns time in seconds, so multiply by 1000 to get time in milliseconds
     return tv.tv_usec;
 }
 
@@ -27,16 +26,20 @@ int runTest(int (*test)()) {
         int result = test();
         int endTime = getTime();
 
-        totalTime += endTime - startTime;
+        if (!result) {
+            return 0;
+        }
 
-        printf("Run %d - Memory Cleared?: %d\n", i + 1, result);
+        double time = endTime - startTime;
+        totalTime += time;
+
+        printf("Run %d - Memory Cleared?: %d; Runtime: %f\n", i + 1, result, time);
     }
 
     double averageTime = (totalTime) / (NUM_RUNS);
     printf("Average Time: %f milliseconds\n", averageTime);
 
-    return averageTime;
-
+    return 1;
 }
 
 int test1() {
@@ -89,18 +92,17 @@ int test3() {
 }
 
 int main() {
-    // printf("Test 1 - Memory Cleared?: %d\n", test1());
-    // printf("Test 2 - Memory Cleared?: %d\n", test2());
-    // printf("Test 3 - Memory Cleared?: %d\n", test3());
-
+    int passed = 0;
     printf("Test 1:\n");
-    runTest(test1);
+    passed += runTest(test1);
 
     printf("\nTest 2:\n");
-    runTest(test2);
+    passed += runTest(test2);
 
     printf("\nTest 3:\n");
-    runTest(test3);
+    passed += runTest(test3);
+
+    printf("\nTests Passed: %d/5\n", passed);
 
     return 0;
 }

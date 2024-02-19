@@ -1,5 +1,11 @@
 CC = gcc
-CFLAGS = -Wall -Wextra
+
+DEBUG ?= 0
+ifeq ($(DEBUG), 1)
+	CFLAGS = -Wall -Wextra -fsanitize=address -g
+else
+	CFLAGS = -Wall -Wextra
+endif
 
 # List of source files
 SRC_FILES = memtest.c memgrind.c mymalloc.c
@@ -15,16 +21,12 @@ MEMGRIND_EXEC = memgrind
 all: $(MEMTEST_EXEC) $(MEMGRIND_EXEC)
 
 # Build memtest executable
-$(MEMTEST_EXEC): memtest.o mymalloc.o
+$(MEMTEST_EXEC): memtest.c mymalloc.c
 	$(CC) $(CFLAGS) -o $@ $^
 
 # Build memgrind executable
-$(MEMGRIND_EXEC): memgrind.o mymalloc.o
+$(MEMGRIND_EXEC): memgrind.c mymalloc.c
 	$(CC) $(CFLAGS) -o $@ $^
-
-# Build object files
-%.o: %.c
-	$(CC) $(CFLAGS) -c $<
 
 # Clean command
 clean:

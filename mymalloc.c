@@ -2,7 +2,16 @@
 #include <stdlib.h>
 #include "mymalloc.h" //reference the related header file
 
-// Allocated memory from global array
+// Makes sure size is rounded to nearest multiple of 8
+#define REALIGN8(x) (((x)+7) & (~7))
+
+// Define metadata size 
+// 1. size_t for size 
+// 2. int for allocation status, either 1 for taken or 0 for free
+#define HEADER_SIZE (REALIGN8(sizeof(size_t) + sizeof(int)))
+
+// Amount of memory allocation for global array
+#define MEMLENGTH  512
 static double memory[MEMLENGTH];
 
 // 0 = free, 1 = taken
@@ -104,7 +113,7 @@ void* mymalloc(size_t size, char* file, int line) {
         setChunkSize(start, memSize);
         setFree(start);
     }
-    int currByte = 0;
+    size_t currByte = 0;
     
     while (currByte < memSize) {
         size_t originalChunkSize = getChunkSize(start);
@@ -145,7 +154,7 @@ void myfree(void* ptr, char* file, int line) {
     chunkheader* prev = NULL;
     chunkheader* start = (chunkheader*) memory;
     size_t memSize = MEMLENGTH * sizeof(double);
-    int currByte = 0;
+    size_t currByte = 0;
     int returnable = 0;
     
     while (currByte < memSize && !returnable) {

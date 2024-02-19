@@ -10,7 +10,7 @@
 #endif
 
 #define MEMSIZE 4096
-#define HEADERSIZE 8
+#define HEADERSIZE 16
 #define OBJECTS 64
 #define OBJSIZE (MEMSIZE / OBJECTS - HEADERSIZE)
 
@@ -40,6 +40,10 @@ int main(int argc, char **argv)
 	}
 	
 	printf("%d incorrect bytes\n", errors);
+
+	for (i = 0; i< OBJECTS; i++) {
+		free(obj[i]);
+	}
 	
 	return EXIT_SUCCESS;
 }
