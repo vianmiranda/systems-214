@@ -2,23 +2,7 @@
 #include <stdlib.h>
 #include "mymalloc.h" //reference the related header file
 
-/*
-  chunk:
-  1. header (metadata) - informs runtime system about chunk size and whether the chunk is allocated
-  2. payload (data) - the actual object/data, a contiguous sequence of bytes
-
-*/
-
-// Makes sure size is rounded to nearest multiple of 8
-#define ROUNDUP8(x) (((x)+7) & (~7))
-
-// Define metadata size 
-// 1. int for size 
-// 2. int for allocation status, either 1 for taken or 0 for free
-#define HEADER_SIZE (sizeof(int)*2)
-
 // Allocated memory from global array
-#define MEMLENGTH  512
 static double memory[MEMLENGTH];
 
 // 0 = free, 1 = taken
@@ -27,10 +11,11 @@ enum allocation_status {
     TAKEN
 };
 
+// 1. Header (metadata) - informs runtime system about chunk size and whether the chunk is allocated
+// 2. Payload (data) - the actual object/data, a contiguous sequence of bytes
 typedef struct {
     size_t size;
     int is_allocated;
-    // chunkheader* next;
 } chunkheader;
 
 typedef char chunkpayload;
@@ -48,7 +33,7 @@ size_t getChunkSize(chunkheader* head) {
 
 // Set the size of a chunk
 void setChunkSize(chunkheader* head, size_t size) {
-    head->size = size + HEADER_SIZE;
+    head->size = size;
 }
 
 // Checks second int for the allocation status
@@ -76,41 +61,62 @@ chunk* getNextChunk(chunkheader* head) {
     return (chunk*)(((char*)head) + getChunkSize(head));
 }
 
+// Returns 1 if memory is cleared, 0 if not
+int getMemoryStatus() {
+    chunkheader* start = (chunkheader*) memory;
+    size_t chunkSize = getChunkSize(start);
+    int isFree = getAllocationStatus(start) == FREE;
+
+    if (isFree && chunkSize == (MEMLENGTH * sizeof(double))) {
+        return 1;
+    }
+	return 0;
+}
+
+// Coalesce provided chunk with the next chunk if both are free
+int coalesce(chunkheader* head) {
+    chunkheader* next = &(getNextChunk(head)->header);
+
+    if (getAllocationStatus(head) == FREE && getAllocationStatus(next) == FREE) {
+        setChunkSize(head, getChunkSize(head) + getChunkSize(next));
+        setChunkSize(next, 0);
+        return 1;
+    }
+    return 0;
+}
 
 void* mymalloc(size_t size, char* file, int line) {
     if (size == 0) {
         fprintf(stderr, "Error: Cannot allocate 0 bytes @ File: %s, Line: %d\n", file, line);
         return NULL;
     }
-    size = ROUNDUP8(size);
+    size = REALIGN8(size);
+    size_t neededSize = size + HEADER_SIZE;
 
     // Get first chunkheader
     chunkheader* start = (chunkheader*) memory;
     
     // Initialize memory
-    size_t memory = MEMLENGTH * sizeof(double);
+    size_t memSize = MEMLENGTH * sizeof(double);
     if (getAllocationStatus(start) == 0 && getChunkSize(start) == 0) {
-        setChunkSize(start, memory - HEADER_SIZE);
+        setChunkSize(start, memSize);
         setFree(start);
     }
     int currByte = 0;
-    size_t neededSize = size + HEADER_SIZE;
-
     
-    while (currByte < memory) {
+    while (currByte < memSize) {
         size_t originalChunkSize = getChunkSize(start);
         if (getAllocationStatus(start) == FREE && originalChunkSize >= neededSize) {
-            size_t newChunkSize = originalChunkSize - neededSize;
-            size_t remainingChunkSize = originalChunkSize - newChunkSize;
+            size_t remainingChunkSize = originalChunkSize - neededSize;
 
             // Allocate the chunk of needed size
-            setChunkSize(start, size);
+            setChunkSize(start, neededSize);
             setAllocated(start);
 
             // If there is remaining space from the original size, update the next chunk's size
             if (remainingChunkSize > 0) {
                 chunk* nextChunk = getNextChunk(start);
-                setChunkSize(&(nextChunk->header), remainingChunkSize - HEADER_SIZE);
+                setChunkSize(&(nextChunk->header), remainingChunkSize);
             }
 
             return getPayload(start);
@@ -127,7 +133,6 @@ void* mymalloc(size_t size, char* file, int line) {
 }
 
 void myfree(void* ptr, char* file, int line) {
-
     // Check if the ptr is null - return an error message
     if (ptr == NULL) {
         fprintf(stderr, "Error: Cannot free NULL pointer @ File: %s, Line: %d\n", file, line);
@@ -135,13 +140,14 @@ void myfree(void* ptr, char* file, int line) {
     }
 
     // Get first chunkheader
+    chunkheader* prev = NULL;
     chunkheader* start = (chunkheader*) memory;
-    size_t memory = MEMLENGTH * sizeof(double);
+    size_t memSize = MEMLENGTH * sizeof(double);
     int currByte = 0;
+    int returnable = 0;
     
-    while (currByte < memory) {
-        if (start == (chunkheader*) ptr) {
-
+    while (currByte < memSize && !returnable) {
+        if (getPayload(start) == (chunkpayload*) ptr) {
             // Check if we are freeing an object that is already free
             if (getAllocationStatus(start) == FREE) {
                 fprintf(stderr, "Error: Cannot free pointer that was already free @ File: %s, Line: %d\n", file, line);
@@ -149,19 +155,24 @@ void myfree(void* ptr, char* file, int line) {
             }
 
             setFree(start);
-            return;
+            returnable = 1;
         }
-        chunkheader* prev = start;
+
+        // Coalesce if the next chunk is free (start with next)
+        coalesce(start);
+        // Coalesce if the previous chunk is free (previous with start)
+        if (prev != NULL && coalesce(prev)) {
+            start = prev;
+        }
+        // If all chunks are free, everything should now be in prev chunk
+
+        prev = start;
         currByte += getChunkSize(start);
         start = &(getNextChunk(start)->header);
-
-        // Coalesce neighboring free chunks
-        if (getAllocationStatus(prev) == FREE && getAllocationStatus(start) == FREE) {
-            setChunkSize(prev, getChunkSize(prev) + getChunkSize(start) - HEADER_SIZE);
-            setChunkSize(start, 0);
-        }
     }
+    if (returnable == 1) return;
     
     fprintf(stderr, "Error: Cannot free pointer that was not allocated @ File: %s, Line: %d\n", file, line);
     return;
 }
+
