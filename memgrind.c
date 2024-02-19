@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
+#include <sys/time.h>
 
 
 // Compile with -DREALMALLOC to use the real malloc() instead of mymalloc()
@@ -9,16 +8,16 @@
 #include "mymalloc.h"
 #endif
 
-void test1() {
+int test1() {
     for(int i = 0; i < 120; i++) {
         char *ptr = malloc(1);  
         free(ptr);
-        printf("ptrArray[%d]: %p\n", i, ptr);
     }
-    printf("Memory Cleared?: %d\n", getMemoryStatus()); 
+
+    return getMemoryStatus();
 }
 
-void test2() {
+int test2() {
     char* objects[120];
 
     for(int i = 0; i < 120; i++) {
@@ -29,15 +28,38 @@ void test2() {
         free(objects[i]);  
     }
 
-    printf("Memory Cleared?: %d\n", getMemoryStatus()); 
+    return getMemoryStatus();
 }
 
-void test3() {
-    
+int test3() {
+    char* objects[120];
+    int index = 0;
+
+    while (index < 120) {
+        int randInt = rand() % 2;
+        if (randInt == 0) {
+            objects[index] = malloc(1);
+            index++;
+        } else {
+            if (index > 0 && objects[index-1] != NULL) {
+                free(objects[index-1]);
+                objects[index-1] = NULL;
+            }
+        }
+    }
+
+    for (int i = 0; i < 120; i++) {
+        if (objects[i] != NULL) {
+            free(objects[i]);
+        }
+    }
+
+    return getMemoryStatus();
 }
 
 int main() {
-    test1();
-    test2();
+    printf("Test 1 - Memory Cleared?: %d\n", test1());
+    printf("Test 2 - Memory Cleared?: %d\n", test2());
+    printf("Test 3 - Memory Cleared?: %d\n", test3());
     return 0;
 }
