@@ -33,7 +33,7 @@ int runTest(int (*test)()) {
         double time = endTime - startTime;
         totalTime += time;
 
-        // printf("Run %d - Memory Cleared?: %d; Runtime: %f\n", i + 1, result, time);
+        printf("Run %d - Memory Cleared?: %d; Runtime: %f\n", i + 1, result, time);
     }
 
     double averageTime = (totalTime) / (NUM_RUNS);
