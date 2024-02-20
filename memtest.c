@@ -72,6 +72,9 @@ int main()// (int argc, char **argv)
 
 	printf("NOTE: Calling malloc on 0 bytes - should throw an error:\n");
 	malloc(0);
+
+	printf("NOTE: Calling malloc on negative bytes - should throw an error (buffer underflow):\n");
+	malloc(-1);
 	
 	return EXIT_SUCCESS;
 }

@@ -97,8 +97,8 @@ int coalesce(chunkheader* head) {
 }
 
 void* mymalloc(size_t size, char* file, int line) {
-    if (size == 0) {
-        fprintf(stderr, "Error: Cannot allocate 0 bytes @ File: %s, Line: %d\n", file, line);
+    if (size <= 0 || size > (MEMLENGTH * sizeof(double)) - HEADER_SIZE) {
+        fprintf(stderr, "Error: Cannot allocate 0 bytes or more than MEMLENGTH @ File: %s, Line: %d\n", file, line);
         return NULL;
     }
     size = REALIGN8(size);
