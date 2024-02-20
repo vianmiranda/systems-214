@@ -100,23 +100,26 @@ int test3() {
 int test4() {
     int* arr1;
 	int* arr2;
-    arr1 = malloc(2032);
-    arr2 = malloc(2032);
-    free(arr1);
-    free(arr2);
-
+	for(int i = 0; i < 50; i++) {
+        arr1 = malloc(2032);
+        arr2 = malloc(2032);
+        free(arr1);
+        free(arr2);
+    }
     return getMemoryStatus();
 }
 
 int test5() {
-    int* i = malloc(4);
-    char* c = malloc(1);
-	double* d = malloc(8);
-	void* v = malloc(16);
-	free(c);
-	free(i);
-	free(d);
-    free(v);
+	for(int i = 0; i < 25; i++) {
+        int* i = malloc(4);
+        char* c = malloc(1);
+        double* d = malloc(8);
+        void* v = malloc(16);
+        free(c);
+        free(i);
+        free(d);
+        free(v);
+    }
     
     return getMemoryStatus();
 }

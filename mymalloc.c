@@ -62,15 +62,15 @@ void setAllocated(chunkheader* head) {
 }
 
 chunkpayload* getPayload(chunkheader* head) {
-    return (chunkpayload*)(((char*)head) + HEADER_SIZE);
+    return (chunkpayload*) (((char*) head) + HEADER_SIZE);
 }
 
 // Returns the pointer to the next chunk
 chunk* getNextChunk(chunkheader* head) {
-    return (chunk*)(((char*)head) + getChunkSize(head));
+    return (chunk*) (((char*) head) + getChunkSize(head));
 }
 
-// Returns 1 if memory is cleared, 0 if not
+// Returns 1 if memory is cleared and properly coalesced, 0 otherwise
 int getMemoryStatus() {
     chunkheader* start = (chunkheader*) memory;
     size_t chunkSize = getChunkSize(start);
@@ -169,13 +169,13 @@ void myfree(void* ptr, char* file, int line) {
             returnable = 1;
         }
 
-        // Coalesce if the next chunk is free (start with next)
+        // Coalesce if the next chunk is free (start chunk with next chunk)
         coalesce(start);
-        // Coalesce if the previous chunk is free (previous with start)
+        // Coalesce if the previous chunk is free (previous chunk with start chunk)
         if (prev != NULL && coalesce(prev)) {
             start = prev;
         }
-        // If all chunks are free, everything should now be in prev chunk
+        // If all chunks are free, everything should now be coalesced into prev chunk
 
         prev = start;
         currByte += getChunkSize(start);
@@ -186,4 +186,3 @@ void myfree(void* ptr, char* file, int line) {
     fprintf(stderr, "Error: Cannot free pointer that was not allocated @ File: %s, Line: %d\n", file, line);
     return;
 }
-
