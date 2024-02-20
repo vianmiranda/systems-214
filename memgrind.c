@@ -97,6 +97,8 @@ int test3() {
     return 1; //getMemoryStatus();
 }
 
+// Repeatedly allocate and deallocate 2 2032-byte memory blocks 50 times. This is done to assess 
+// how we handle larger memory allocations and deallocations.
 int test4() {
     int* arr1;
 	int* arr2;
@@ -109,6 +111,8 @@ int test4() {
     return 1; //getMemoryStatus();
 }
 
+// Repeatedly allocate and deallocate 4 different types of memory blocks(int, char, double, void) 25 times. 
+// This tests how efficiently we can manage the memory for various objects.
 int test5() {
 	for(int i = 0; i < 25; i++) {
         int* i = malloc(4);
