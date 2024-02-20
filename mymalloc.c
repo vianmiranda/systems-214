@@ -124,10 +124,14 @@ void* mymalloc(size_t size, char* file, int line) {
             setChunkSize(start, neededSize);
             setAllocated(start);
 
-            // If there is remaining space from the original size, update the next chunk's size
-            if (remainingChunkSize > 0) {
+            if (remainingChunkSize > HEADER_SIZE + REALIGN8(1)) {
+                // If there is remaining space from the original size, update the next chunk's size
                 chunk* nextChunk = getNextChunk(start);
                 setChunkSize(&(nextChunk->header), remainingChunkSize);
+                setFree(&(nextChunk->header));
+            } else if (remainingChunkSize > 0) {
+                // If the remaining space is not enough for another chunk, just allocate the whole thing
+                setChunkSize(start, originalChunkSize);
             }
 
             return getPayload(start);
