@@ -8,7 +8,7 @@
 // Define metadata size 
 // 1. size_t for size 
 // 2. int for allocation status, either 1 for taken or 0 for free
-#define HEADER_SIZE (REALIGN8(sizeof(size_t) + sizeof(int)))
+#define HEADER_SIZE (REALIGN8(sizeof(chunkheader)))
 
 // Amount of memory allocation for global array
 #define MEMLENGTH  512

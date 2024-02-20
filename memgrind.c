@@ -42,6 +42,7 @@ int runTest(int (*test)()) {
     return 1;
 }
 
+// malloc() and immediately free() a 1-byte object, 120 times.
 int test1() {
     for(int i = 0; i < 120; i++) {
         char *ptr = malloc(1);  
@@ -51,6 +52,8 @@ int test1() {
     return getMemoryStatus();
 }
 
+// Use malloc() to get 120 1-byte objects, storing the pointers in an array, then use free() to
+// deallocate the chunks.
 int test2() {
     char* objects[120];
 
@@ -65,6 +68,9 @@ int test2() {
     return getMemoryStatus();
 }
 
+// Create an array of 120 pointers. Repeatedly make a random choice between allocating a 1-byte
+// object and adding the pointer to the array and deallocating a previously allocated object (if
+// any), until you have allocated 120 times. Deallocate any remaining objects.
 int test3() {
     char* objects[120];
     int index = 0;
@@ -91,6 +97,28 @@ int test3() {
     return getMemoryStatus();
 }
 
+int test4() {
+    int* arr1;
+	int* arr2;
+    arr1 = malloc(2032);
+    arr2 = malloc(2032);
+    free(arr1);
+    free(arr2);
+
+    return getMemoryStatus();
+}
+
+int test5() {
+    int* i = malloc(4);
+    char* c = malloc(1);
+	double* d = malloc(8);
+	void* v = malloc(16);
+	free(c);
+	free(i);
+	free(d);
+    free(v);
+}
+
 int main() {
     int passed = 0;
     printf("Test 1:\n");
@@ -101,6 +129,12 @@ int main() {
 
     printf("\nTest 3:\n");
     passed += runTest(test3);
+
+    printf("\nTest 4:\n");
+    passed += runTest(test4);
+
+    printf("\nTest 5:\n");
+    passed += runTest(test5);
 
     printf("\nTests Passed: %d/5\n", passed);
 
