@@ -139,7 +139,7 @@ void* mymalloc(size_t size, char* file, int line) {
         }
     }
     
-    fprintf(stderr, "Error: insufficient memory @ File: %s, Line: %d\n", file, line);
+    fprintf(stderr, "Error: Insufficient memory @ File: %s, Line: %d\n", file, line);
     return NULL;
 }
 

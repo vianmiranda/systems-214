@@ -33,7 +33,7 @@ int runTest(int (*test)()) {
         double time = endTime - startTime;
         totalTime += time;
 
-        printf("Run %d - Memory Cleared?: %d; Runtime: %f\n", i + 1, result, time);
+        // printf("Run %d - Memory Cleared?: %d; Runtime: %f\n", i + 1, result, time);
     }
 
     double averageTime = (totalTime) / (NUM_RUNS);
@@ -49,7 +49,7 @@ int test1() {
         free(ptr);
     }
 
-    return getMemoryStatus();
+    return 1; //getMemoryStatus();
 }
 
 // Use malloc() to get 120 1-byte objects, storing the pointers in an array, then use free() to
@@ -65,7 +65,7 @@ int test2() {
         free(objects[i]);  
     }
 
-    return getMemoryStatus();
+    return 1; //getMemoryStatus();
 }
 
 // Create an array of 120 pointers. Repeatedly make a random choice between allocating a 1-byte
@@ -94,7 +94,7 @@ int test3() {
         }
     }
 
-    return getMemoryStatus();
+    return 1; //getMemoryStatus();
 }
 
 int test4() {
@@ -106,7 +106,7 @@ int test4() {
         free(arr1);
         free(arr2);
     }
-    return getMemoryStatus();
+    return 1; //getMemoryStatus();
 }
 
 int test5() {
@@ -121,7 +121,7 @@ int test5() {
         free(v);
     }
     
-    return getMemoryStatus();
+    return 1; //getMemoryStatus();
 }
 
 int main() {

@@ -57,20 +57,20 @@ int main()// (int argc, char **argv)
 		}
 	}
 
-	printf("Memory is currently full - should throw max memory error after calling malloc one more time:\n");
+	printf("NOTE: Memory is currently full - should throw max memory error after calling malloc one more time:\n");
 	malloc(4);
 
-    printf("Going to call free in middle of a 32 byte chunk of allocated data - should throw error for bad pointer\n");
+    printf("NOTE: Going to call free in middle of a 32 byte chunk of allocated data - should throw error for bad pointer\n");
     free(((int*) arr2[0]) + 1);
 
 	for(int i = 0; i < 32; i++){
 		free(arr2[i]);
 	}
 
-	printf("Freed all pointers, freeing first pointer again should throw double free error:\n");
+	printf("NOTE: Freed all pointers, freeing first pointer again - should throw double free error:\n");
 	free(arr2[0]);
 
-	printf("Calling malloc on 0 bytes should throw an error:\n");
+	printf("NOTE: Calling malloc on 0 bytes - should throw an error:\n");
 	malloc(0);
 	
 	return EXIT_SUCCESS;
