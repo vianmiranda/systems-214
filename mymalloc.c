@@ -86,13 +86,13 @@ int getMemoryStatus() {
 int coalesce(chunkheader* head) {
     chunkheader* next = &(getNextChunk(head)->header);
 
-    if (next < (chunkheader*) (memory + MEMLENGTH * sizeof(double))) {
-      if (getAllocationStatus(head) == FREE && getAllocationStatus(next) == FREE) {
-          setChunkSize(head, getChunkSize(head) + getChunkSize(next));
-          setChunkSize(next, 0);
-          return 1;
-      }
-    }
+    if (next < (chunkheader*) (memory + MEMLENGTH)) {
+         if (getAllocationStatus(head) == FREE && getAllocationStatus(next) == FREE) {
+            setChunkSize(head, getChunkSize(head) + getChunkSize(next));
+            setChunkSize(next, 0);
+            return 1;
+        }
+    } 
     return 0;
 }
 

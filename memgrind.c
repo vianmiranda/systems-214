@@ -117,6 +117,8 @@ int test5() {
 	free(i);
 	free(d);
     free(v);
+    
+    return getMemoryStatus();
 }
 
 int main() {
