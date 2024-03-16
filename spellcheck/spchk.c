@@ -5,19 +5,50 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include "triedict.h"
 
-typedef struct trie_node trie;
-
-struct trie_node {
-    char letter; // letter of the node (uppercase can only be uppercase, lowercase can be either)
-    int isWord; // 1 if word, 0 if not
-    trie* children[26]; 
-};
-
-trie* dict;
+#define BUFFER_SIZE 128
 
 int create_dict(int fd) {
     // read from file and create trie
+    ssize_t bytesRead = 0;
+    char* buffer = malloc(BUFFER_SIZE);
+    if (buffer == NULL) {
+        perror("Error allocating memory");
+        return -1;
+    }
+
+    if (init_trie() == -1) {
+        free(buffer);
+        return -1;
+    }
+    
+    char* word = malloc(BUFFER_SIZE);
+    ssize_t jj = 0;
+    while ((bytesRead = read(fd, buffer, BUFFER_SIZE)) > 0) {
+        for (ssize_t ii = 0; ii < bytesRead; ii++) {
+            if (buffer[ii] == '\n') {
+                word[jj] = '\0';
+                jj = 0;
+                if (add_word_to_trie(word) == -1) {
+                    free(word);
+                    free(buffer);
+                    return -1;
+                }
+                memset(word, 0, BUFFER_SIZE);
+                continue;
+            }
+            word[jj] = buffer[ii];
+            jj++;
+        }
+    }
+    free(word);
+    free(buffer);
+    if (bytesRead == -1) {
+        perror("Error reading from file");
+        return -1;
+    }
+
     return 0;
 }
 
