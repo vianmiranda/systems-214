@@ -11,28 +11,24 @@
 
 int create_dict(int fd) {
     // read from file and create trie
-    ssize_t bytesRead = 0;
-    char* buffer = malloc(BUFFER_SIZE);
+    char buffer[BUFFER_SIZE];
     if (buffer == NULL) {
         perror("Error allocating memory");
         return -1;
     }
 
     if (init_trie() == -1) {
-        free(buffer);
         return -1;
     }
     
-    char* word = malloc(BUFFER_SIZE);
-    ssize_t jj = 0;
+    char word[BUFFER_SIZE];
+    ssize_t jj = 0, bytesRead = 0;
     while ((bytesRead = read(fd, buffer, BUFFER_SIZE)) > 0) {
         for (ssize_t ii = 0; ii < bytesRead; ii++) {
             if (buffer[ii] == '\n') {
                 word[jj] = '\0';
                 jj = 0;
                 if (add_word_to_trie(word) == -1) {
-                    free(word);
-                    free(buffer);
                     return -1;
                 }
                 memset(word, 0, BUFFER_SIZE);
@@ -42,8 +38,6 @@ int create_dict(int fd) {
             jj++;
         }
     }
-    free(word);
-    free(buffer);
     if (bytesRead == -1) {
         perror("Error reading from file");
         return -1;
@@ -52,7 +46,7 @@ int create_dict(int fd) {
     return 0;
 }
 
-char* clean_text(char* word) {
+char** clean_text(char* word) {
     // text -> {dict varitions}
     // "apple" -> {"apple"}
     // "Apple" -> {"apple", "Apple"}
@@ -79,12 +73,12 @@ char* clean_text(char* word) {
         }
     }
 
-    int numUppercase = 0;
     int wordLen = trailingPunctuation - leadingPunctuation + 1;
-    if (wordLen <= 0) {
-        return "";
+    if (wordLen == 0) {
+        return malloc(0);
     }
 
+    int numUppercase = 0;
     int ignorePunctuation = wordLen;
     for (int ii = leadingPunctuation; ii <= trailingPunctuation; ii++) {
         if (word[ii] >= 'A' && word[ii] <= 'Z') {
@@ -115,35 +109,31 @@ char* clean_text(char* word) {
 
     int numVariations = exactMatch + allLowercase + properCase + allUppercase;
 
-    char* res = malloc(numVariations * (wordLen * sizeof(char))); // TODO: free this
+    char** res = malloc(numVariations * (wordLen * sizeof(char))); // TODO: free this
     if (res == NULL) {
         perror("Error allocating memory");
         return NULL;
     }
     
-    char* pointer = res;
     if (exactMatch) {
-        pointer = strncpy(pointer, parsed, wordLen);
-        pointer = res + wordLen;
+        res[0] = strncpy(res[0], parsed, wordLen);
     } else if (allLowercase) {
         for (int ii = 0; ii < wordLen; ii++) {
             if (parsed[ii] >= 'A' && parsed[ii] <= 'Z') {
                 parsed[ii] = parsed[ii] + 32;
             }
         }
-        pointer = strncpy(pointer, parsed, wordLen);
-        pointer = res + wordLen;
+        res[1] = strncpy(res[1], parsed, wordLen);
     } else if (properCase) {
         parsed[0] = parsed[0] - 32;
-        pointer = strncpy(pointer, parsed, wordLen);
-        pointer = res + wordLen;
+        res[2] = strncpy(res[2], parsed, wordLen);
     } else if (allUppercase) {
         for (int ii = 0; ii < wordLen; ii++) {
             if (parsed[ii] >= 'a' && parsed[ii] <= 'z') {
                 parsed[ii] = parsed[ii] - 32;
             }
         }
-        pointer = strncpy(pointer, parsed, wordLen);
+        res[3] = strncpy(res[3], parsed, wordLen);
     }
     
     return res;
@@ -151,8 +141,6 @@ char* clean_text(char* word) {
 
 int check_text(int fd) {
     // read from file and check against trie1
-
-    ssize_t bytesRead = 0;
     char buffer[BUFFER_SIZE];
     if (buffer == NULL) {
         perror("Error allocating memory");
@@ -160,20 +148,20 @@ int check_text(int fd) {
     }
     
     int line_number = 0, col_number = 0;
-
-    // iterate through the text file
-
+    char word[BUFFER_SIZE];
+    ssize_t jj = 0, bytesRead = 0;
     while ((bytesRead = read(fd, buffer, BUFFER_SIZE)) > 0) {
-        
-        // get the word in the line
+        for (ssize_t ii = 0; ii < bytesRead; ii++) {
+            if (buffer[ii] == ' ') { // TODO: add more delimiters (whitespace and hyphens)
 
-        // use a helper method to get a list the different possible variations of the word, if any
-
-        // check if any of the allowed variations (any word in the list) are in the dict
-
-        // if its not return error msg with line and col number
-
-
+            }
+            word[jj] = buffer[ii];
+            jj++;
+        }
+    }
+    if (bytesRead == -1) {
+        perror("Error reading from file");
+        return -1;
     }
 
     return 0;
