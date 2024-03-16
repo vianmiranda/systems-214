@@ -68,3 +68,31 @@ int add_word_to_trie(char* word) {
 
     return 0;
 }
+
+int check_word_in_trie(char* word) {
+    trie* node = get_dict();
+    for (int ii = 0; ii < strlen(word); ii++) {
+        char letter = word[ii];
+        int index;
+        if (letter == '\'') {
+            index = NUM_LETTERS - 1;
+        } else if (letter >= 'A' && letter <= 'Z') {
+            index = letter - 'A';
+        } else if (letter >= 'a' && letter <= 'z') {
+            index = letter - 'a' + 26;
+        } else {
+            return 0;
+        }
+
+        if (node->children[index] == NULL) {
+            // word is automatically not in trie
+            return 0;
+        }
+
+        node = node->children[index];
+    }
+
+    // we are at the last node (last character in the word), so check its "isWord"
+    return node->isWord;
+
+}
