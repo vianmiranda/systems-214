@@ -76,13 +76,13 @@ cleanText* clean_text(char* word) {
 
     int leadingPunctuation;
     for (leadingPunctuation = 0; leadingPunctuation < strlen(word); leadingPunctuation++) {
-        if (word[trailingPunctuation] == '[' 
-        || word[trailingPunctuation] == '{' 
-        || word[trailingPunctuation] == '(' 
-        || word[trailingPunctuation] == '\"' 
-        || word[trailingPunctuation] == '\'') {
-            continue;
-        }
+        if (!(word[leadingPunctuation] == '[' 
+        || word[leadingPunctuation] == '{' 
+        || word[leadingPunctuation] == '(' 
+        || word[leadingPunctuation] == '\"' 
+        || word[leadingPunctuation] == '\'')) {
+            break;;
+        } 
     }
 
     int wordLen = trailingPunctuation - leadingPunctuation + 1;
@@ -135,7 +135,19 @@ cleanText* clean_text(char* word) {
         free(clean);
         return NULL;
     }
-    
+    for (int ii = 0; ii < numVariations; ii++) {
+        res[ii] = malloc(wordLen * sizeof(char));
+        if (res[ii] == NULL) {
+            perror("Error allocating memory");
+            for (int jj = 0; jj < ii; jj++) {
+                free(res[jj]);
+            }
+            free(res);
+            free(clean);
+            return NULL;
+        }
+    }
+
     if (exactMatch) {
         res[0] = strncpy(res[0], parsed, wordLen);
 
@@ -184,7 +196,7 @@ int check_text(int fd, char* file_name) {
             if (buffer[ii] == '\n') {
                 // increment line_number and reset col_number
                 line_number++;
-                col_number = 1;
+                col_number = 0;
             } else {
                 // increment col_number
                 col_number++;
@@ -217,7 +229,7 @@ int check_text(int fd, char* file_name) {
 
                 if (!correct) {
                     SUCCESS = 0;
-                    fprintf(stderr, "%s: Line %d, col %d: %s\n", file_name, line_number, col_number, word);
+                    fprintf(stderr, "%s (%d, %d): %s\n", file_name, (line_number - (buffer[ii] == '\n' ? 1 : 0)), saved_col_number, word);
                 }
 
                 memset(word, 0, BUFFER_SIZE);
