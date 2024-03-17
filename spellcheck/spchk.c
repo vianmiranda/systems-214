@@ -5,9 +5,17 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <ctype.h>
 #include "triedict.h"
 
 #define BUFFER_SIZE 128
+
+typedef struct {
+    char** variations;
+    int numVariations;
+} cleanText;
+
+int SUCCESS = 1;
 
 int create_dict(int fd) {
     // read from file and create trie
@@ -46,7 +54,7 @@ int create_dict(int fd) {
     return 0;
 }
 
-char** clean_text(char* word) {
+cleanText* clean_text(char* word) {
     // text -> {dict varitions}
     // "apple" -> {"apple"}
     // "Apple" -> {"apple", "Apple"}
@@ -61,34 +69,34 @@ char** clean_text(char* word) {
 
     int trailingPunctuation;
     for (trailingPunctuation = strlen(word) - 1; trailingPunctuation >= 0; trailingPunctuation--) {
-        if ((word[trailingPunctuation] >= 'A' && word[trailingPunctuation] <= 'Z') || (word[trailingPunctuation] >= 'a' && word[trailingPunctuation] <= 'z')) {
+        if (isalpha(word[trailingPunctuation])) {
             break;
         }
     }
 
     int leadingPunctuation;
     for (leadingPunctuation = 0; leadingPunctuation < strlen(word); leadingPunctuation++) {
-        if ((word[leadingPunctuation] >= 'A' && word[leadingPunctuation] <= 'Z') || (word[leadingPunctuation] >= 'a' && word[leadingPunctuation] <= 'z')) {
-            break;
+        if (word[trailingPunctuation] == '[' 
+        || word[trailingPunctuation] == '{' 
+        || word[trailingPunctuation] == '(' 
+        || word[trailingPunctuation] == '\"' 
+        || word[trailingPunctuation] == '\'') {
+            continue;
         }
     }
 
     int wordLen = trailingPunctuation - leadingPunctuation + 1;
-    if (wordLen == 0) {
-        return malloc(0);
-    }
-
     int numUppercase = 0;
     int ignorePunctuation = wordLen;
     for (int ii = leadingPunctuation; ii <= trailingPunctuation; ii++) {
-        if (word[ii] >= 'A' && word[ii] <= 'Z') {
+        if (isupper(word[ii])) {
             numUppercase += 1;
             if (ii == 0) {
                 properCase = 1;
             } else {
                 properCase = 0;
             }
-        } else if (!(word[ii] >= 'a' && word[ii] <= 'z')) {
+        } else if (!isalpha(word[ii])) {
             ignorePunctuation -= 1;
         }
     }
@@ -103,58 +111,123 @@ char** clean_text(char* word) {
         allLowercase = 1;
     }
 
+    cleanText* clean = malloc(sizeof(cleanText));
+    if (clean == NULL) {
+        perror("Error allocating memory");
+        return NULL;
+    }
+    if (wordLen <= 0) {
+        clean->numVariations = 0;
+        clean->variations = NULL;
+        return clean;
+    }
+
     char* parsed = word + leadingPunctuation;
     parsed[wordLen] = '\0';
     wordLen++;
 
     int numVariations = exactMatch + allLowercase + properCase + allUppercase;
+    clean->numVariations = numVariations;
 
-    char** res = malloc(numVariations * (wordLen * sizeof(char))); // TODO: free this
+    char** res = malloc(numVariations * (wordLen * sizeof(char)));
     if (res == NULL) {
         perror("Error allocating memory");
+        free(clean);
         return NULL;
     }
     
     if (exactMatch) {
         res[0] = strncpy(res[0], parsed, wordLen);
-    } else if (allLowercase) {
-        for (int ii = 0; ii < wordLen; ii++) {
-            if (parsed[ii] >= 'A' && parsed[ii] <= 'Z') {
-                parsed[ii] = parsed[ii] + 32;
+
+        if (allLowercase) {
+            for (int ii = 0; ii < wordLen; ii++) {
+                if (isupper(parsed[ii])) {
+                    parsed[ii] = parsed[ii] + 32;
+                }
+            }
+            res[1] = strncpy(res[1], parsed, wordLen);
+
+            if (properCase) {
+                parsed[0] = parsed[0] - 32;
+                res[2] = strncpy(res[2], parsed, wordLen);
+
+                if (allUppercase) {
+                    for (int ii = 0; ii < wordLen; ii++) {
+                        if (islower(parsed[ii])) {
+                            parsed[ii] = parsed[ii] - 32;
+                        }
+                    }
+                    res[3] = strncpy(res[3], parsed, wordLen);
+                }
             }
         }
-        res[1] = strncpy(res[1], parsed, wordLen);
-    } else if (properCase) {
-        parsed[0] = parsed[0] - 32;
-        res[2] = strncpy(res[2], parsed, wordLen);
-    } else if (allUppercase) {
-        for (int ii = 0; ii < wordLen; ii++) {
-            if (parsed[ii] >= 'a' && parsed[ii] <= 'z') {
-                parsed[ii] = parsed[ii] - 32;
-            }
-        }
-        res[3] = strncpy(res[3], parsed, wordLen);
     }
-    
-    return res;
+    clean->variations = res;
+
+    return clean;
 }
 
-int check_text(int fd) {
+int check_text(int fd, char* file_name) {
     // read from file and check against trie1
     char buffer[BUFFER_SIZE];
     if (buffer == NULL) {
         perror("Error allocating memory");
         return -1;
     }
-    
-    int line_number = 0, col_number = 0;
+
+    int prevWhitespace = 1;
+    int line_number = 1, col_number = 0, saved_col_number;
     char word[BUFFER_SIZE];
     ssize_t jj = 0, bytesRead = 0;
     while ((bytesRead = read(fd, buffer, BUFFER_SIZE)) > 0) {
         for (ssize_t ii = 0; ii < bytesRead; ii++) {
-            if (buffer[ii] == ' ') { // TODO: add more delimiters (whitespace and hyphens)
-
+            if (buffer[ii] == '\n') {
+                // increment line_number and reset col_number
+                line_number++;
+                col_number = 1;
+            } else {
+                // increment col_number
+                col_number++;
             }
+
+            if (!prevWhitespace && isspace(buffer[ii])) { 
+                // If the previous character was not whitespace and the current character is whitespace, then we have a word
+                word[jj] = '\0';
+                jj = 0;
+                prevWhitespace = 1;
+
+                cleanText* cleanWords = clean_text(word);
+                if (cleanWords == NULL) {
+                    memset(word, 0, BUFFER_SIZE);
+                    return -1;
+                } else if (cleanWords->numVariations == 0) { // TODO: fix, always getting numVariations == 0
+                    free(cleanWords);
+                    memset(word, 0, BUFFER_SIZE);
+                    continue;
+                }
+
+                int correct = 0;
+                for (int kk = 0; kk < cleanWords->numVariations; kk++) {
+                    if (!correct && check_word_in_trie(cleanWords->variations[kk]) == 1) {
+                        correct = 1;
+                    }
+                }
+                free(cleanWords->variations);
+                free(cleanWords);
+
+                if (!correct) {
+                    SUCCESS = 0;
+                    fprintf(stderr, "%s: Line %d, col %d: %s\n", file_name, line_number, col_number, word);
+                }
+
+                memset(word, 0, BUFFER_SIZE);
+                continue;
+            } else if (prevWhitespace && !isspace(buffer[ii])) {
+                // If the previous character was whitespace and the current character is not whitespace, then we have the start of a word
+                saved_col_number = col_number;
+                prevWhitespace = 0;
+            }
+
             word[jj] = buffer[ii];
             jj++;
         }
@@ -173,8 +246,11 @@ int file_handler(const char* pathname, int (*func)()) {
         perror("Error opening file");
         return -1;
     }
-    
-    if (func(fd) == -1) {
+
+    //TODO: CHECK IF THIS WORKS
+    if (func == create_dict && func(fd) == -1) {
+        return -1;
+    } else if (func(fd, pathname) == -1) {
         return -1;
     }
 
@@ -234,7 +310,11 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    return EXIT_SUCCESS;
+    if (SUCCESS) {
+        printf("All words are spelled correctly\n");
+    }
+
+    return SUCCESS ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 
