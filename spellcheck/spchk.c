@@ -75,13 +75,13 @@ cleanText* clean_text(char* word) {
     }
 
     int leadingPunctuation;
-    for (leadingPunctuation = 0; leadingPunctuation < strlen(word); leadingPunctuation++) {
+    for (leadingPunctuation = 0; leadingPunctuation < (int) strlen(word); leadingPunctuation++) {
         if (!(word[leadingPunctuation] == '[' 
         || word[leadingPunctuation] == '{' 
         || word[leadingPunctuation] == '(' 
         || word[leadingPunctuation] == '\"' 
         || word[leadingPunctuation] == '\'')) {
-            break;;
+            break;
         } 
     }
 

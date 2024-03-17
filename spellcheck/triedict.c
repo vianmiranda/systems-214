@@ -62,7 +62,7 @@ int char_to_index(char letter) {
 */
 int add_word_to_trie(char* word) {
     trie* node = get_dict();
-    for (int ii = 0; ii < strlen(word); ii++) {
+    for (int ii = 0; ii < (int) strlen(word); ii++) {
         char letter = word[ii];
         int index = char_to_index(letter);
         if (index == -1) {
@@ -96,7 +96,7 @@ int add_word_to_trie(char* word) {
 */
 int check_word_in_trie(char* word) {
     trie* node = get_dict();
-    for (int ii = 0; ii < strlen(word); ii++) {
+    for (int ii = 0; ii < (int) strlen(word); ii++) {
         char letter = word[ii];
         int index = char_to_index(letter);
         if (index == -1) {
