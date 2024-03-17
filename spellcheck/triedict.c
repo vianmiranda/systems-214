@@ -13,7 +13,7 @@ struct trie_node {
     trie* children[NUM_LETTERS]; 
 };
 
-trie* dict;
+trie* dict = NULL;
 
 /**
  * @return the dict node of the trie
@@ -23,20 +23,28 @@ trie* get_dict() {
 }
 
 /**
+ * Recursively frees all trie_nodes
+*/
+void free_trie(trie* node) {
+    for (int ii = 0; ii < NUM_LETTERS; ii++) {
+        // printf("%d: Freeing %p\n", ii, node->children[ii]);
+        if (node->children[ii] != NULL) {
+            free_trie(node->children[ii]);
+        }
+    }
+    free(node);
+}
+
+/**
  * Initializes the dict nodeof the trie
  * 
  * @return 0 if successful, -1 if not
 */
 int init_trie() {
-    dict = malloc(sizeof(trie));
+    dict = calloc(1, sizeof(trie));
     if (dict == NULL) {
         perror("Error allocating memory");
         return -1;
-    }
-    dict->letter = '\0';
-    dict->isWord = 0;
-    for (int ii = 0; ii < NUM_LETTERS; ii++) {
-        dict->children[ii] = NULL;
     }
     return 0;
 }
@@ -70,16 +78,13 @@ int add_word_to_trie(char* word) {
         }
         
         if (node->children[index] == NULL) {
-            trie* new_node = malloc(sizeof(trie));
+            trie* new_node = calloc(1, sizeof(trie));
             if (new_node == NULL) {
                 perror("Error allocating memory");
+                free(new_node);
                 return -1;
             }
             new_node->letter = letter;
-            new_node->isWord = 0;
-            for (int jj = 0; jj < NUM_LETTERS; jj++) {
-                new_node->children[jj] = NULL;
-            }
             node->children[index] = new_node;
         }
         node = node->children[index];

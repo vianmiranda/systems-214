@@ -25,10 +25,6 @@ int create_dict(int fd) {
         return -1;
     }
 
-    if (init_trie() == -1) {
-        return -1;
-    }
-    
     char word[BUFFER_SIZE];
     ssize_t jj = 0, bytesRead = 0;
     while ((bytesRead = read(fd, buffer, BUFFER_SIZE)) > 0) {
@@ -62,7 +58,7 @@ cleanText* clean_text(char* word) {
     // "MacDonald" -> {"MacDonald"}
     // "HeLlO" -> {"HeLlO"}
 
-    const int exactMatch = 1; // If none of these below are true, then the word must match exactly. Always true by default
+    int exactMatch = 1; // If none of these below are true, then the word must match exactly. Always true by default
     int allLowercase = 0; // strictest case
     int properCase = 0; // allLowercase will always be true if this is true
     int allUppercase = 0; // allLowercase & properCase will always be true if this is true
@@ -107,7 +103,7 @@ cleanText* clean_text(char* word) {
         properCase = 1;
         allUppercase = 1;
     }
-    if (numUppercase == 0) {
+    if (numUppercase == 0 || properCase == 1) {
         allLowercase = 1;
     }
 
@@ -129,7 +125,7 @@ cleanText* clean_text(char* word) {
     int numVariations = exactMatch + allLowercase + properCase + allUppercase;
     clean->numVariations = numVariations;
 
-    char** res = malloc(numVariations * (wordLen * sizeof(char)));
+    char** res = malloc(numVariations * sizeof(char*));
     if (res == NULL) {
         perror("Error allocating memory");
         free(clean);
@@ -280,11 +276,17 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
     
+    if (init_trie() == -1) {
+        free_trie();
+        return EXIT_FAILURE;
+    }
+    
     for (int ii = 1; ii < argc; ii++) {
         // for each entry, check if valid entry
         // for the second + entries, check that it does not begin with `.` 
         if (ii == 1) {
             if (file_handler(argv[ii], create_dict) == -1) {
+                free_trie();
                 return EXIT_FAILURE;
             }
         } else {
@@ -293,6 +295,7 @@ int main(int argc, char* argv[]) {
                 DIR* dir = opendir(argv[ii]);
                 if (dir == NULL) {
                     perror("Error opening directory");
+                    free_trie();
                     return EXIT_FAILURE;
                 }
                 
@@ -307,16 +310,19 @@ int main(int argc, char* argv[]) {
                     }
 
                     if (file_handler(name, check_text) == -1) {
+                        free_trie();
                         return EXIT_FAILURE;
                     }
                 }              
 
                 if (closedir(dir) == -1) {
                     perror("Error closing directory");
+                    free_trie();
                     return EXIT_FAILURE;
                 }
             } else {
                 if (file_handler(argv[ii], check_text) == -1) {
+                    free_trie();
                     return EXIT_FAILURE;
                 }
             }
@@ -327,7 +333,6 @@ int main(int argc, char* argv[]) {
         printf("All words are spelled correctly\n");
     }
 
+    free_trie();
     return SUCCESS ? EXIT_SUCCESS : EXIT_FAILURE;
 }
-
-
