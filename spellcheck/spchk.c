@@ -223,6 +223,7 @@ int check_text(int fd, char* file_name) {
                     if (!correct && check_word_in_trie(cleanWords->variations[kk]) == 1) {
                         correct = 1;
                     }
+                    free(cleanWords->variations[kk]);
                 }
                 free(cleanWords->variations);
                 free(cleanWords);
