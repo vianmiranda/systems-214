@@ -383,6 +383,9 @@ int check_text(int fd, char* file_name) {
                 // If the previous character was whitespace and the current character is not whitespace, then we have the start of a word
                 saved_col_number = col_number;
                 prevWhitespace = 0;
+            } else if (isspace(buffer[ii])) {
+                prevWhitespace = 1;
+                continue;
             }
 
             word[jj] = buffer[ii];
