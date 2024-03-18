@@ -17,7 +17,7 @@ OBJ_FILES = spchk.o triedict.o
 SPCHK_EXEC = spchk
 
 # Default target
-: $(SPCHK_EXEC)
+all: $(SPCHK_EXEC)
 
 # Build spchk executable
 $(SPCHK_EXEC): spchk.c triedict.c
