@@ -27,9 +27,9 @@ int create_dict(int fd) {
 
     char word[BUFFER_SIZE];
     ssize_t jj = 0, bytesRead = 0;
-    while ((bytesRead = read(fd, buffer, BUFFER_SIZE)) > 0) {
-        for (ssize_t ii = 0; ii < bytesRead; ii++) {
-            if (buffer[ii] == '\n') {
+    while ((bytesRead = read(fd, buffer, BUFFER_SIZE)) >= 0) {
+        for (ssize_t ii = 0; ii < bytesRead || (bytesRead == 0 && jj != 0); ii++) {
+            if (buffer[ii] == '\n' || (bytesRead == 0 && jj != 0)) {
                 word[jj] = '\0';
                 jj = 0;
                 if (add_word_to_trie(word) == -1) {
@@ -40,6 +40,9 @@ int create_dict(int fd) {
             }
             word[jj] = buffer[ii];
             jj++;
+        }
+        if (bytesRead == 0) {
+            break;
         }
     }
     if (bytesRead == -1) {
@@ -274,8 +277,8 @@ int check_text(int fd, char* file_name) {
     int line_number = 1, col_number = 0, saved_col_number;
     char word[BUFFER_SIZE];
     ssize_t jj = 0, bytesRead = 0;
-    while ((bytesRead = read(fd, buffer, BUFFER_SIZE)) > 0) {
-        for (ssize_t ii = 0; ii < bytesRead; ii++) {
+    while ((bytesRead = read(fd, buffer, BUFFER_SIZE)) >= 0) {
+        for (ssize_t ii = 0; ii < bytesRead || (bytesRead == 0 && jj != 0); ii++) {
             if (buffer[ii] == '\n') {
                 // increment line_number and reset col_number
                 line_number++;
@@ -285,7 +288,7 @@ int check_text(int fd, char* file_name) {
                 col_number++;
             }
 
-            if (!prevWhitespace && isspace(buffer[ii])) { 
+            if (!prevWhitespace && (isspace(buffer[ii]) || (bytesRead == 0 && jj != 0))) { 
                 // If the previous character was not whitespace and the current character is whitespace, then we have a word
                 word[jj] = '\0';
                 jj = 0;
@@ -304,7 +307,7 @@ int check_text(int fd, char* file_name) {
                 if (cleanWords == NULL) {
                     memset(word, 0, BUFFER_SIZE);
                     return -1;
-                } else if (cleanWords->numVariations == 0) { // TODO: fix, always getting numVariations == 0
+                } else if (cleanWords->numVariations == 0) {
                     free(cleanWords);
                     memset(word, 0, BUFFER_SIZE);
                     continue;
@@ -335,6 +338,9 @@ int check_text(int fd, char* file_name) {
 
             word[jj] = buffer[ii];
             jj++;
+        }
+        if (bytesRead == 0) {
+            break;
         }
     }
     if (bytesRead == -1) {
