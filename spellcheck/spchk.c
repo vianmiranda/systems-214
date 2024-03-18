@@ -175,6 +175,93 @@ cleanText* clean_text(char* word) {
     return clean;
 }
 
+
+/**
+ * Check each word in the hyphenated word
+ * 
+ * @returns 0 if there no error, errorColNumber if there is an error, -1 if there is a memory error
+*/
+
+int check_hyphenated_word(char* word, int start_index) {
+    int length = strlen(word);
+    int hyphen_pos = -1;
+    int correct = 1;
+    int start_curr_word_index = start_index;
+
+
+    // ex - "apple-pie-tasty"
+    // Find the position of a hyphen
+    for (int i = 0; i < length; i++) {
+        if (word[i] == '-') {
+            hyphen_pos = i;
+            break;
+        }
+    }
+
+    // If a hyphen isn't found, we are at the last word in the hyphenated word, so check that word by itself
+    // ie. we are at "tasty"
+    if (hyphen_pos == -1) {
+        char* curr_word = strdup(word);
+        if (curr_word == NULL) {
+            perror("Error allocating memory");
+            return -1;
+        }
+        
+        cleanText* cleanWords = clean_text(curr_word);
+        if (cleanWords == NULL) {
+            free(curr_word);
+            return -1;
+        }
+
+        // Check each variation of the word
+        for (int kk = 0; kk < cleanWords->numVariations; kk++) {
+            if (!correct && check_word_in_trie(cleanWords->variations[kk]) == 1) {
+                correct = 1;
+            }
+            free(cleanWords->variations[kk]);
+        }
+        free(cleanWords->variations);
+        free(cleanWords);
+        free(curr_word);
+
+        return correct;
+    }
+
+    // Extract the current word before the hyphen
+    // "apple"
+    char* curr_word = malloc(hyphen_pos - start_curr_word_index + 1);
+    if (curr_word == NULL) {
+        perror("Error allocating memory");
+        return -1;
+    }
+    strncpy(curr_word, word + start_curr_word_index, hyphen_pos - start_curr_word_index);
+    curr_word[hyphen_pos - start_curr_word_index] = '\0';
+
+    // Check the current word
+    cleanText* cleanWords = clean_text(curr_word);
+    if (cleanWords == NULL) {
+        free(curr_word);
+        return -1;
+    }
+
+    // Check each variation of the word
+    for (int kk = 0; kk < cleanWords->numVariations; kk++) {
+        if (!correct && check_word_in_trie(cleanWords->variations[kk]) == 1) {
+            correct = 1;
+        }
+        free(cleanWords->variations[kk]);
+    }
+    free(cleanWords->variations);
+    free(cleanWords);
+    free(curr_word);
+
+    int errorColNumber = check_hyphenated_word(word + hyphen_pos + 1, hyphen_pos + 1);
+    if (errorColNumber != 0) return errorColNumber;
+
+    return correct ? 0 : start_index;
+}
+
+
 int check_text(int fd, char* file_name) {
     // read from file and check against trie1
     char buffer[BUFFER_SIZE];
@@ -197,12 +284,24 @@ int check_text(int fd, char* file_name) {
                 // increment col_number
                 col_number++;
             }
+        
+            
 
             if (!prevWhitespace && isspace(buffer[ii])) { 
                 // If the previous character was not whitespace and the current character is whitespace, then we have a word
                 word[jj] = '\0';
                 jj = 0;
                 prevWhitespace = 1;
+
+
+                // Check if the word contains a hyphen
+                if (strchr(word, '-') != NULL) {
+                    int hyphenated_word_error_col = check_hyphenated_word(word, word[0]);
+                    if (hyphenated_word_error_col != -1 && hyphenated_word_error_col != 0) {
+                        SUCCESS = 0;
+                        fprintf(stderr, "%s (%d, %d): %s\n", file_name, (line_number - (buffer[ii] == '\n' ? 1 : 0)), hyphenated_word_error_col, word);
+                    }
+                }
 
                 cleanText* cleanWords = clean_text(word);
                 if (cleanWords == NULL) {

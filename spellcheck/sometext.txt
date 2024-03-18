@@ -1,0 +1,9 @@
+apple
+banana
+pear
+hi
+hello
+math
+science
+english
+apple-pie
