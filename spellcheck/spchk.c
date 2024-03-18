@@ -391,6 +391,10 @@ int main(int argc, char* argv[]) {
         } else {
             int dirname_len = strlen(argv[ii]);
             if (argv[ii][dirname_len - 1] == '/') {
+                char directory_name[dirname_len + 1];
+                memmove(directory_name, argv[ii], dirname_len + 1);
+                directory_name[dirname_len] = '\0';
+
                 DIR* dir = opendir(argv[ii]);
                 if (dir == NULL) {
                     perror("Error opening directory");
@@ -408,7 +412,11 @@ int main(int argc, char* argv[]) {
                         continue;
                     }
 
-                    if (file_handler(name, check_text) == -1) {
+                    char full_path[dirname_len + name_len + 1];
+                    memcpy(full_path, directory_name, dirname_len + 1);
+                    strcat(full_path, name);
+
+                    if (file_handler(full_path, check_text) == -1) {
                         free_trie();
                         return EXIT_FAILURE;
                     }
