@@ -87,7 +87,7 @@ cleanText* clean_text(char* word) {
     for (int ii = leadingPunctuation; ii <= trailingPunctuation; ii++) {
         if (isupper(word[ii])) {
             numUppercase += 1;
-            if (ii == 0) {
+            if (ii == leadingPunctuation) {
                 properCase = 1;
             } else {
                 properCase = 0;
@@ -97,7 +97,6 @@ cleanText* clean_text(char* word) {
         }
     }
     
-
     if (numUppercase == ignorePunctuation) {
         allLowercase = 1;
         properCase = 1;
@@ -118,7 +117,8 @@ cleanText* clean_text(char* word) {
         return clean;
     }
 
-    char* parsed = word + leadingPunctuation;
+    char parsed[wordLen];
+    strncpy(parsed, word + leadingPunctuation, wordLen);
     parsed[wordLen] = '\0';
     wordLen++;
 
@@ -284,16 +284,13 @@ int check_text(int fd, char* file_name) {
                 // increment col_number
                 col_number++;
             }
-        
-            
 
             if (!prevWhitespace && isspace(buffer[ii])) { 
                 // If the previous character was not whitespace and the current character is whitespace, then we have a word
                 word[jj] = '\0';
                 jj = 0;
                 prevWhitespace = 1;
-
-
+                
                 // Check if the word contains a hyphen
                 if (strchr(word, '-') != NULL) {
                     int hyphenated_word_error_col = check_hyphenated_word(word, word[0]);
