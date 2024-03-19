@@ -17,11 +17,18 @@ typedef struct {
 
 int SUCCESS = 1;
 
+/**
+ * Create variations of a word based on the following rules:
+ * 1. If the word is all lowercase, then create variations for all lowercase, proper case, and all uppercase
+ * 2. If the word is proper case, then create variations for proper case and all uppercase
+ * 3. If the word is all uppercase, then create variations for all uppercase
+ * 4. If the word is none of the above, create an exact match case and all uppercase
+ * 
+ * @param word: The word to create variations for
+ * @return cleanText*: A struct containing the valid variations of the word
+*/
 cleanText* create_variations(char* word) {
-    int exactMatch = 1; // If none of these below are true, then the word must match exactly. Always true by default
-    int allLowercase = 0; // strictest case
-    int properCase = 0; // allLowercase will always be true if this is true
-    int allUppercase = 0; // allLowercase & properCase will always be true if this is true
+    int exactMatch = 1, allLowercase = 0, properCase = 0, allUppercase = 0; 
 
     int numUppercase = 0;
     int wordLen = strlen(word);
@@ -40,15 +47,18 @@ cleanText* create_variations(char* word) {
     }
     
     if (numUppercase == 0) {
+        // current word is all lowercase, therefore create variations for all lowercase, proper case, and all uppercase
         exactMatch = 0;
         allLowercase = 1;
         properCase = 1;
         allUppercase = 1;
     }
     if (numUppercase > 0) {
+        // current word has at least 1 uppercase letter, so create variations for all uppercase and exact match
         allUppercase = 1;
     } 
     if (numUppercase == ignorePunctuation) {
+        // current word is all uppercase, so create variations for all uppercase
         allUppercase = 1;
         exactMatch = 0;
     }
@@ -64,7 +74,7 @@ cleanText* create_variations(char* word) {
         return clean;
     }
 
-    char parsed[wordLen];
+    char parsed[wordLen + 1];
     strncpy(parsed, word, wordLen);
     parsed[wordLen] = '\0';
     wordLen++;
@@ -93,10 +103,12 @@ cleanText* create_variations(char* word) {
 
     int iterator = 0;
     if (exactMatch) {
+        // no need to change anything
         res[iterator] = strncpy(res[iterator], parsed, wordLen);
         iterator++;
     }
     if (allLowercase) {
+        // change all to lowercase
         for (int ii = 0; ii < wordLen; ii++) {
             if (isupper(parsed[ii])) {
                 parsed[ii] = parsed[ii] + 32;
@@ -105,6 +117,7 @@ cleanText* create_variations(char* word) {
         res[iterator] = strncpy(res[iterator], parsed, wordLen);
         iterator++;
     } if (properCase) {
+        // change first to uppercase
         if (islower(parsed[0])) {
             parsed[0] = parsed[0] - 32;
         }
@@ -116,6 +129,7 @@ cleanText* create_variations(char* word) {
         res[iterator] = strncpy(res[iterator], parsed, wordLen);
         iterator++;
     } if (allUppercase) {
+        // change all to uppercase
         for (int ii = 0; ii < wordLen; ii++) {
             if (islower(parsed[ii])) {
                 parsed[ii] = parsed[ii] - 32;
@@ -128,6 +142,13 @@ cleanText* create_variations(char* word) {
     return clean;
 }
 
+/**
+ * Create trie dictionary of all words from a given file. 
+ * Each word should be on its own line.
+ * 
+ * @param fd: The file descriptor of the file to read from
+ * @return int: 0 if successful, -1 if an error occurred
+*/
 int create_dict(int fd) {
     // read from file and create trie
     char buffer[BUFFER_SIZE];
@@ -182,22 +203,21 @@ int create_dict(int fd) {
     return 0;
 }
 
+/**
+ * Clean a word by removing leading and trailing punctuation
+ * 
+ * @param word: The word to clean
+ * @return cleanText*: A struct containing the cleaned version of the word
+*/
 cleanText* clean_text(char* word) {
-    // text -> {dict varitions}
-    // "apple" -> {"apple"}
-    // "Apple" -> {"apple", "Apple"}
-    // "APPLE" -> {"apple", "Apple", "APPLE"}
-    // "MacDonald" -> {"MacDonald"}
-    // "HeLlO" -> {"HeLlO"}
-
-    int trailingPunctuation;
+    int trailingPunctuation; // index of the last alpha character
     for (trailingPunctuation = strlen(word) - 1; trailingPunctuation >= 0; trailingPunctuation--) {
         if (isalpha(word[trailingPunctuation])) {
             break;
         }
     }
 
-    int leadingPunctuation;
+    int leadingPunctuation; // index of the first alpha character
     for (leadingPunctuation = 0; leadingPunctuation < (int) strlen(word); leadingPunctuation++) {
         if (!(word[leadingPunctuation] == '[' 
         || word[leadingPunctuation] == '{' 
@@ -243,49 +263,34 @@ cleanText* clean_text(char* word) {
 }
 
 
-// Check each word in the hyphenated word. If the word is not in the dictionary, set SUCCESS = 0 and return -1
+/** 
+ * Check each word in the hyphenated word. 
+ * 
+ * @param word: The hyphenated word to check
+ * @return int: 0 if the word is not in the trie, 1 if the word is in the trie, -1 if an error occurred
+*/
 int handle_hyphenated_word(char *word) {
-    // printf("inside handle_hyphen");
     char *temp = malloc(strlen(word) + 1);
     memcpy(temp, word, strlen(word) + 1);
     char *token = strtok(temp, "-");
     while (token != NULL) {
-        cleanText *cleanWords = clean_text(token);
-        if (cleanWords == NULL) {
+        if (check_word_in_trie(token) == 0) {
             free(temp);
-            return -1;
-        } else if (cleanWords->numVariations == 0) {
-            free(cleanWords);
-            free(temp);
-            token = strtok(NULL, "-");
-            continue;
-        }
-        // for (int kk = 0; kk < cleanWords->numVariations; kk++) {
-        //     if (check_word_in_trie(cleanWords->variations[kk]) == 0) {
-        //         free(cleanWords->variations[kk]);
-        //         free(cleanWords->variations);
-        //         free(cleanWords);
-        //         return 0;
-        //     }
-        //     free(cleanWords->variations[kk]);
-        // }
-        // free(cleanWords->variations);
-        // free(cleanWords);
-
-        if (check_word_in_trie(cleanWords->variations[0]) == 0) {
             return 0;
         }
-        free(cleanWords->variations[0]);
-        free(cleanWords->variations);
-        free(cleanWords);
         token = strtok(NULL, "-");
     }
     free(temp);
-    // If we reach this point, then none of the variations is correct
     return 1;
 }
 
-
+/**
+ * Check each word in a given file against the the provided dictionary
+ * 
+ * @param fd: The file descriptor of the file to read from
+ * @param file_name: The name of the file to check
+ * @return int: 0 if successful, -1 if an error occurred
+*/
 int check_text(int fd, char* file_name) {
     // read from file and check against trie1
     char buffer[BUFFER_SIZE];
@@ -320,9 +325,24 @@ int check_text(int fd, char* file_name) {
                 jj = 0;
                 prevWhitespace = 1;
 
+
+
+                // Otherwise, word is normal. Clean leading and trailing punctuation and then check against trie
+                cleanText* cleanWord = clean_text(word);
+                if (cleanWord == NULL) {
+                    return -1;
+                } else if (cleanWord->numVariations == 0) {
+                    free(cleanWord);
+                    memset(word, 0, BUFFER_SIZE);
+                    continue;
+                }
+
                 // Check if the word contains a hyphen
                 if (hyphen_present) {
-                    int hyphen_result = handle_hyphenated_word(word);
+                    int hyphen_result = handle_hyphenated_word(cleanWord->variations[0]);
+                    free(cleanWord->variations[0]);
+                    free(cleanWord->variations);
+                    free(cleanWord);
                     if (hyphen_result == -1) {
                         return -1;
                     } else if (hyphen_result == 0) {
@@ -330,15 +350,6 @@ int check_text(int fd, char* file_name) {
                         fprintf(stderr, "%s (%d, %d): %s\n", file_name, (line_number - (buffer[ii] == '\n' ? 1 : 0)), saved_col_number, word);   
                     }
                     hyphen_present = 0;
-                    continue;
-                }
-
-                cleanText* cleanWord = clean_text(word);
-                if (cleanWord == NULL) {
-                    return -1;
-                } else if (cleanWord->numVariations == 0) {
-                    free(cleanWord);
-                    memset(word, 0, BUFFER_SIZE);
                     continue;
                 }
 
@@ -357,6 +368,7 @@ int check_text(int fd, char* file_name) {
                 saved_col_number = col_number;
                 prevWhitespace = 0;
             } else if (isspace(buffer[ii])) {
+                // If the current character is whitespace, then mark prevWhitespace as 1 so future iterations know that the previous character was whitespace
                 prevWhitespace = 1;
                 continue;
             }
@@ -376,6 +388,13 @@ int check_text(int fd, char* file_name) {
     return 0;
 }
 
+/**
+ * Handle file opening, closing, and calling the appropriate function
+ * 
+ * @param pathname: The path of the file to open
+ * @param func: The function to call
+ * @return int: 0 if successful, -1 if an error occurred
+*/
 int file_handler(const char* pathname, int (*func)()) {
     int fd = open(pathname, O_RDONLY);
     if (fd == -1) {
@@ -396,6 +415,12 @@ int file_handler(const char* pathname, int (*func)()) {
     return 0;
 }
 
+/**
+ * Main function to handle command line arguments and call the appropriate functions
+ * 
+ * @return int: EXIT_SUCCESS if all words are correct
+ *              EXIT_FAILURE if an error occurred or any words are incorrect
+*/
 int main(int argc, char* argv[]) {
     if (argc <= 2) {
         fprintf(stderr, "Usage: ./spchk <dictionary file> <input file>\n");

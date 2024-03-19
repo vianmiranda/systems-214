@@ -24,9 +24,9 @@ file can be broken into lines, which are a sequence of characters ending with a 
 These lines may contain words, which we will consider a sequence of non-whitespace characters.
 We number all the lines in a file, starting from one. Each character in a line has a column
 number, which also starts from one. We will want to track the line and column number for each
-word, defined as the column number of the word’s first character.
+word, defined as the column number of the word's first character.
 Trailing punctuation To avoid problems with common sentence punctuation, we ignore punctu-
-ation marks occurring at the end of a word. Similarly, we ignore quotation marks (’ and ") and
+ation marks occurring at the end of a word. Similarly, we ignore quotation marks (' and ") and
 brackets (( and [ and {) at the start of a word.
 Hyphens A hyphenated word contains two or more smaller words separated by hyphens (-).
 These are correctly spelled if all the component words are correctly spelled.
