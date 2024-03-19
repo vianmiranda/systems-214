@@ -179,122 +179,21 @@ cleanText* clean_text(char* word) {
 }
 
 
-/**
- * Check each word in the hyphenated word
- * 
- * @returns 0 if there no error, errorColNumber if there is an error, -1 if there is a memory error
-*/
-
-int check_hyphenated_word(char* word, int start_index) {
-    int length = strlen(word);
-    int hyphen_pos = -1;
-    int correct = 0;
-    int start_curr_word_index = start_index;
-    printf("hyphenated word: %s \n", word);
-    printf("start_curr_word_index: %d  \n", start_curr_word_index);
-
-
-    // ex - "apple-pie-tasty"
-    // Find the position of a hyphen
-    for (int i = 0; i < length; i++) {
-        if (word[i] == '-') {
-            hyphen_pos = i;
-            break;
-        }
-    }
-    printf("hyphen_pos: %d \n", hyphen_pos);
-
-    // If a hyphen isn't found, we are at the last word in the hyphenated word, so check that word by itself
-    // ie. we are at "tasty"
-    if (hyphen_pos == -1) {
-        printf("We are at the last word in the hyphenated word. \n");
-        char* curr_word = strdup(word);
-        printf("curr_word after strdup: %s \n", curr_word);
-        if (curr_word == NULL) {
-            perror("Error allocating memory");
-            return -1;
-        }
-        
-        cleanText* cleanWords = clean_text(curr_word);
-        if (cleanWords == NULL) {
-            printf("Couldn't find a variation for %s\n", word);
-            free(curr_word);
-            return -1;
-        }
-
-        // Check each variation of the word
-        for (int kk = 0; kk < cleanWords->numVariations; kk++) {
-            if (!correct && check_word_in_trie(cleanWords->variations[kk]) == 1) {
-                printf("We found a correct variation for %s\n", word);
-                correct = 1;
-            }
-            free(cleanWords->variations[kk]);
-        }
-        free(cleanWords->variations);
-        free(cleanWords);
-        free(curr_word);
-
-        return correct;
-    }
-
-    // Extract the current word before the hyphen
-    // "apple"
-    char* curr_word = malloc(hyphen_pos + 1);
-    if (curr_word == NULL) {
-        perror("Error allocating memory");
-        return -1;
-    }
-    
-    // printf("word + start_curr_word_index %s\n", word);
-    strncpy(curr_word, word, hyphen_pos);
-    // printf("curr_word after mallocing: %s\n", curr_word);
-    curr_word[hyphen_pos] = '\0';
-    printf("curr_word:  %s \n", curr_word);
-
-    // Check the current word
-    cleanText* cleanWords = clean_text(curr_word);
-
-    if (cleanWords == NULL) {
-        printf("Couldn't find a variation for %s\n", word);
-        free(curr_word);
-        return -1;
-    }
-
-    // Check each variation of the word
-    for (int kk = 0; kk < cleanWords->numVariations; kk++) {
-        printf("Variation %d: %s\n", kk + 1, cleanWords->variations[kk]);
-        if (!correct && check_word_in_trie(cleanWords->variations[kk]) == 1) {
-            printf("We found a correct variation for %s\n", word);
-            correct = 1;
-        }
-        free(cleanWords->variations[kk]);
-    }
-    free(cleanWords->variations);
-    free(cleanWords);
-    free(curr_word);
-
-    int errorColNumber = check_hyphenated_word(word + hyphen_pos + 1, hyphen_pos + 1);
-    if (errorColNumber != 0) return errorColNumber;
-
-    return correct ? 0 : start_index;
-}
-
-
-// Check each word in the hyphenated word. If the word is not in the dictionary, set SUCCESS = 0
-void handle_hyphenated_word(char *word) {
+// Check each word in the hyphenated word. If the word is not in the dictionary, set SUCCESS = 0 and return -1
+int handle_hyphenated_word(char *word) {
     char *token = strtok(word, "-");
     while (token != NULL) {
         cleanText *cleanWords = clean_text(token);
         if (cleanWords == NULL) {
             fprintf(stderr, "Error cleaning hyphenated word: %s\n", word);
-            return;
+            return -1;
         }
         for (int kk = 0; kk < cleanWords->numVariations; kk++) {
             if (check_word_in_trie(cleanWords->variations[kk]) == 1) {
                 free(cleanWords->variations[kk]);
                 free(cleanWords->variations);
                 free(cleanWords);
-                return;
+                return 0;
             }
             free(cleanWords->variations[kk]);
         }
@@ -304,6 +203,7 @@ void handle_hyphenated_word(char *word) {
     }
     // If we reach this point, then none of the variations is correct
     SUCCESS = 0;
+    return 0;
 }
 
 
@@ -335,20 +235,12 @@ int check_text(int fd, char* file_name) {
                 word[jj] = '\0';
                 jj = 0;
                 prevWhitespace = 1;
-                // Check if the word contains a hyphen
-                // if (strchr(word, '-') != NULL) {
-                //     printf("inside hyphen check \n");
-                //     int hyphenated_word_error_col = check_hyphenated_word(word, 0);
-                //     printf("outside hyphen check \n");
-                //     printf("hyphenated_word_error_col: %d \n", hyphenated_word_error_col);
-                //     if (hyphenated_word_error_col != -1 && hyphenated_word_error_col != 0) {
-                //         SUCCESS = 0;
-                //         fprintf(stderr, "%s (%d, %d): %s\n", file_name, (line_number - (buffer[ii] == '\n' ? 1 : 0)), hyphenated_word_error_col, word);
-                //     }
-                // }
 
+                // Check if the word contains a hyphen
                 if (word[0] == '-' && jj > 1) {
-                    handle_hyphenated_word(word);
+                    if (handle_hyphenated_word(word) == -1) {
+                        return -1;
+                    }
                     continue;
                 }
 
@@ -410,7 +302,6 @@ int file_handler(const char* pathname, int (*func)()) {
         return -1;
     }
 
-    //TODO: CHECK IF THIS WORKS
     if (func == create_dict && func(fd) == -1) {
         return -1;
     } else if (func(fd, pathname) == -1) {

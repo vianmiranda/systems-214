@@ -1,7 +1,6 @@
-hi
-hello
 apple-pie
-pizza-is-nice
-pear
+how-are-you
+i-like-food
+my-name-is-rachit
 my-name-is-vian
 my-favorite-food-is-pizza
