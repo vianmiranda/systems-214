@@ -325,9 +325,7 @@ int check_text(int fd, char* file_name) {
                 jj = 0;
                 prevWhitespace = 1;
 
-
-
-                // Otherwise, word is normal. Clean leading and trailing punctuation and then check against trie
+                // Clean leading and trailing punctuation and then check against trie
                 cleanText* cleanWord = clean_text(word);
                 if (cleanWord == NULL) {
                     return -1;
@@ -353,6 +351,7 @@ int check_text(int fd, char* file_name) {
                     continue;
                 }
 
+                // Otherwise, word is normal and we can check against trie
                 if (check_word_in_trie(cleanWord->variations[0]) == 0) {
                     SUCCESS = 0;
                     fprintf(stderr, "%s (%d, %d): %s\n", file_name, (line_number - (buffer[ii] == '\n' ? 1 : 0)), saved_col_number, word);
