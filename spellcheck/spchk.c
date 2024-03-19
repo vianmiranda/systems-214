@@ -190,11 +190,6 @@ cleanText* clean_text(char* word) {
     // "MacDonald" -> {"MacDonald"}
     // "HeLlO" -> {"HeLlO"}
 
-    // int exactMatch = 1; // If none of these below are true, then the word must match exactly. Always true by default
-    // int allLowercase = 0; // strictest case
-    // int properCase = 0; // allLowercase will always be true if this is true
-    // int allUppercase = 0; // allLowercase & properCase will always be true if this is true
-
     int trailingPunctuation;
     for (trailingPunctuation = strlen(word) - 1; trailingPunctuation >= 0; trailingPunctuation--) {
         if (isalpha(word[trailingPunctuation])) {
@@ -245,128 +240,50 @@ cleanText* clean_text(char* word) {
     clean->variations = res;
 
     return clean;
-
-    // int wordLen = trailingPunctuation - leadingPunctuation + 1;
-    // int numUppercase = 0;
-    // int ignorePunctuation = wordLen;
-    // for (int ii = leadingPunctuation; ii <= trailingPunctuation; ii++) {
-    //     if (isupper(word[ii])) {
-    //         numUppercase += 1;
-    //         if (ii == leadingPunctuation) {
-    //             properCase = 1;
-    //         } else {
-    //             properCase = 0;
-    //         }
-    //     } else if (!isalpha(word[ii])) {
-    //         ignorePunctuation -= 1;
-    //     }
-    // }
-    
-    // if (numUppercase == ignorePunctuation) {
-    //     allLowercase = 1;
-    //     properCase = 1;
-    //     allUppercase = 1;
-    // }
-    // if (numUppercase == 0 || properCase == 1) {
-    //     allLowercase = 1;
-    // }
-
-    // cleanText* clean = malloc(sizeof(cleanText));
-    // if (clean == NULL) {
-    //     perror("Error allocating memory");
-    //     return NULL;
-    // }
-    // if (wordLen <= 0) {
-    //     clean->numVariations = 0;
-    //     clean->variations = NULL;
-    //     return clean;
-    // }
-
-    // char parsed[wordLen];
-    // strncpy(parsed, word + leadingPunctuation, wordLen);
-    // parsed[wordLen] = '\0';
-    // wordLen++;
-
-    // int numVariations = exactMatch + allLowercase + properCase + allUppercase;
-    // clean->numVariations = numVariations;
-    // // printf("%d %d %d %d\n", exactMatch, allLowercase, properCase, allUppercase);
-    // char** res = malloc(numVariations * sizeof(char*));
-    // if (res == NULL) {
-    //     perror("Error allocating memory");
-    //     free(clean);
-    //     return NULL;
-    // }
-    // for (int ii = 0; ii < numVariations; ii++) {
-    //     res[ii] = malloc(wordLen * sizeof(char));
-    //     if (res[ii] == NULL) {
-    //         perror("Error allocating memory");
-    //         for (int jj = 0; jj < ii; jj++) {
-    //             free(res[jj]);
-    //         }
-    //         free(res);
-    //         free(clean);
-    //         return NULL;
-    //     }
-    // }
-
-    // if (exactMatch) {
-    //     res[0] = strncpy(res[0], parsed, wordLen);
-
-    //     if (allLowercase) {
-    //         for (int ii = 0; ii < wordLen; ii++) {
-    //             if (isupper(parsed[ii])) {
-    //                 parsed[ii] = parsed[ii] + 32;
-    //             }
-    //         }
-    //         res[1] = strncpy(res[1], parsed, wordLen);
-
-    //         if (properCase) {
-    //             parsed[0] = parsed[0] - 32;
-    //             res[2] = strncpy(res[2], parsed, wordLen);
-
-    //             if (allUppercase) {
-    //                 for (int ii = 0; ii < wordLen; ii++) {
-    //                     if (islower(parsed[ii])) {
-    //                         parsed[ii] = parsed[ii] - 32;
-    //                     }
-    //                 }
-    //                 res[3] = strncpy(res[3], parsed, wordLen);
-    //             }
-    //         }
-    //     }
-    // }
-    // clean->variations = res;
-
-    // return clean;
 }
 
 
 // Check each word in the hyphenated word. If the word is not in the dictionary, set SUCCESS = 0 and return -1
-// int handle_hyphenated_word(char *word) {
-//     char *token = strtok(word, "-");
-//     while (token != NULL) {
-//         cleanText *cleanWords = clean_text(token);
-//         if (cleanWords == NULL) {
-//             fprintf(stderr, "Error cleaning hyphenated word: %s\n", word);
-//             return -1;
-//         }
-//         for (int kk = 0; kk < cleanWords->numVariations; kk++) {
-//             if (check_word_in_trie(cleanWords->variations[kk]) == 1) {
-//                 free(cleanWords->variations[kk]);
-//                 free(cleanWords->variations);
-//                 free(cleanWords);
-//                 return 0;
-//             }
-//             free(cleanWords->variations[kk]);
-//         }
-//         free(cleanWords->variations);
-//         free(cleanWords);
-//         token = strtok(NULL, "-");
-//     }
-//     // If we reach this point, then none of the variations is correct
-//     SUCCESS = 0;
-//     return 0;
-// }
+int handle_hyphenated_word(char *word) {
+    // printf("inside handle_hyphen");
+    char *temp = malloc(strlen(word) + 1);
+    memcpy(temp, word, strlen(word) + 1);
+    char *token = strtok(temp, "-");
+    while (token != NULL) {
+        cleanText *cleanWords = clean_text(token);
+        if (cleanWords == NULL) {
+            free(temp);
+            return -1;
+        } else if (cleanWords->numVariations == 0) {
+            free(cleanWords);
+            free(temp);
+            token = strtok(NULL, "-");
+            continue;
+        }
+        // for (int kk = 0; kk < cleanWords->numVariations; kk++) {
+        //     if (check_word_in_trie(cleanWords->variations[kk]) == 0) {
+        //         free(cleanWords->variations[kk]);
+        //         free(cleanWords->variations);
+        //         free(cleanWords);
+        //         return 0;
+        //     }
+        //     free(cleanWords->variations[kk]);
+        // }
+        // free(cleanWords->variations);
+        // free(cleanWords);
+
+        if (check_word_in_trie(cleanWords->variations[0]) == 0) {
+            return 0;
+        }
+        free(cleanWords->variations[0]);
+        free(cleanWords->variations);
+        free(cleanWords);
+        token = strtok(NULL, "-");
+    }
+    free(temp);
+    // If we reach this point, then none of the variations is correct
+    return 1;
+}
 
 
 int check_text(int fd, char* file_name) {
@@ -379,6 +296,7 @@ int check_text(int fd, char* file_name) {
 
     int prevWhitespace = 1;
     int line_number = 1, col_number = 0, saved_col_number;
+    int hyphen_present = 0;
     char word[BUFFER_SIZE];
     ssize_t jj = 0, bytesRead = 0;
     while ((bytesRead = read(fd, buffer, BUFFER_SIZE)) >= 0) {
@@ -392,6 +310,10 @@ int check_text(int fd, char* file_name) {
                 col_number++;
             }
 
+            if (buffer[ii] == '-') {
+                hyphen_present = 1;
+            }
+
             if (!prevWhitespace && (isspace(buffer[ii]) || (bytesRead == 0 && jj != 0))) { 
                 // If the previous character was not whitespace and the current character is whitespace, then we have a word
                 word[jj] = '\0';
@@ -399,13 +321,17 @@ int check_text(int fd, char* file_name) {
                 prevWhitespace = 1;
 
                 // Check if the word contains a hyphen
-                // if (word[0] == '-' && jj > 1) {
-                //     if (handle_hyphenated_word(word) == -1) {
-                //         return -1;
-                //     }
-                //     continue;
-                // }
-
+                if (hyphen_present) {
+                    int hyphen_result = handle_hyphenated_word(word);
+                    if (hyphen_result == -1) {
+                        return -1;
+                    } else if (hyphen_result == 0) {
+                        SUCCESS = 0;
+                        fprintf(stderr, "%s (%d, %d): %s\n", file_name, (line_number - (buffer[ii] == '\n' ? 1 : 0)), saved_col_number, word);   
+                    }
+                    hyphen_present = 0;
+                    continue;
+                }
 
                 cleanText* cleanWord = clean_text(word);
                 if (cleanWord == NULL) {
@@ -420,33 +346,9 @@ int check_text(int fd, char* file_name) {
                     SUCCESS = 0;
                     fprintf(stderr, "%s (%d, %d): %s\n", file_name, (line_number - (buffer[ii] == '\n' ? 1 : 0)), saved_col_number, word);
                 }
+                free(cleanWord->variations[0]);
+                free(cleanWord->variations);
                 free(cleanWord);
-
-                // cleanText* cleanWords = clean_text(word);
-                // if (cleanWords == NULL) {
-                //     memset(word, 0, BUFFER_SIZE);
-                //     return -1;
-                // } else if (cleanWords->numVariations == 0) {
-                //     free(cleanWords);
-                //     memset(word, 0, BUFFER_SIZE);
-                //     continue;
-                // }
-
-                // int correct = 0;
-                // for (int kk = 0; kk < cleanWords->numVariations; kk++) {
-                //     // printf("%s\n", cleanWords->variations[kk]);
-                //     if (!correct && check_word_in_trie(cleanWords->variations[kk]) == 1) {
-                //         correct = 1;
-                //     }
-                //     free(cleanWords->variations[kk]);
-                // }
-                // free(cleanWords->variations);
-                // free(cleanWords);
-
-                // if (!correct) {
-                //     SUCCESS = 0;
-                //     fprintf(stderr, "%s (%d, %d): %s\n", file_name, (line_number - (buffer[ii] == '\n' ? 1 : 0)), saved_col_number, word);
-                // }
 
                 memset(word, 0, BUFFER_SIZE);
                 continue;
