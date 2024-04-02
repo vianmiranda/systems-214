@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <glob.h>
 #include "arraylist.h"
 
 #define BUFFER_SIZE 1024
@@ -20,7 +21,7 @@ enum {
 int exitStatus = SUCCESS;
 
 // tokenize the line into tokens
-arraylist_t* tokenize(char* line, char* tokens[]) {
+arraylist_t* tokenize(char* line) {
     char* token = strtok(line, " \t");
     arraylist_t* list;
     al_init(list, 10);
@@ -62,16 +63,97 @@ char* read_line(int fd) {
     return line;
 }
 
-void batch_mode(int fd) {
-    
-    
 
+void cd(char* path) {
+    if (chdir(path) == -1) {
+        perror("Error using cd");
+        exitStatus = FAILURE;
+    }
 }
+
+void pwd() {
+    char currentWorkingDirectory[1024];
+    if (getcwd(currentWorkingDirectory, sizeof(currentWorkingDirectory)) == NULL) {
+        perror("Error using pwd");
+        exitStatus = FAILURE;
+    } else {
+        printf("%s\n", currentWorkingDirectory);
+    }
+}
+
+
+void which(char* program) {
+    // PATH is a colon-separated list of directories
+    char* path = getenv("PATH");
+
+    // break the list by colon to iterate through each directory
+    char* token = strtok(path, ":");
+    while (token != NULL) {
+        char* fullPath = malloc(strlen(token) + strlen(program) + 2); // we add 2 for the '/' and null terminator
+
+        // combine the directory and program name
+        strcpy(fullPath, token);
+        strcat(fullPath, "/");
+        strcat(fullPath, program);
+        
+        // check if file exists. if it does, print the path
+        if (access(fullPath, F_OK) == 0) {
+            printf("%s\n", fullPath);
+            return;
+        }
+
+        // reset token and move to next directory
+        token = strtok(NULL, ":");
+        free(fullPath);
+    }
+    fprintf(stderr, "Error: %s not found\n", program);
+    exitStatus = FAILURE;
+}
+
+void batch_mode(int fd) {
+}
+
 
 void interactive_mode() {
     printf(WELCOME_MSG);
+
     while (1) {
+
+        // print prompt
         printf(PROMPT);
+
+        // read line
+        char* line = read_line(STDIN_FILENO);
+
+        // tokenize line 
+        arraylist_t* tokens = tokenize(line);
+
+        // wildcard expansion using glob. if there is a match, add it to token list
+        for (int i = 0; i < al_length(tokens); i++) {
+            char* token = al_get(tokens, i);
+            if (strchr(token, '*') != NULL) {
+                // wildcard token
+                glob_t glob_result;
+                // initialize glob_result
+                memset(&glob_result, 0, sizeof(glob_result));
+
+                // expand wildcard and add each match to token list
+                // GLOB_NOCHECK: if wildcard does not match any files, this returns the original token and is added to the list
+                if (glob(token, GLOB_NOCHECK, NULL, &glob_result) == 0) {
+                    for (int j = 0; i < glob_result.gl_pathc; j++) {
+                        // push at i + j + 1 to maintain proper order
+                        al_push_at_pos(tokens, i + j + 1, glob_result.gl_pathv[j]);
+                    }
+                }
+
+
+            }
+        }
+
+
+
+
+
         
     }
     printf(EXIT_MSG);
