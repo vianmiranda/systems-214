@@ -6,19 +6,13 @@
 #include <errno.h>
 #include <glob.h>
 #include "arraylist.h"
+#include "commands.h"
 
 #define BUFFER_SIZE 1024
 
 const char* PROMPT      = "mysh> ";
 const char* WELCOME_MSG = "Welcome to mysh!\n";
 const char* EXIT_MSG    = "Exiting mysh...\n";
-
-enum {
-    SUCCESS,
-    FAILURE
-};
-
-int exitStatus = SUCCESS;
 
 // tokenize the line into tokens
 arraylist_t* tokenize(char* line) {
@@ -43,8 +37,6 @@ arraylist_t* tokenize(char* line) {
     return list;
 }
 
-
-
 char* read_line(int fd) {
     char* line = malloc(0);
     char buffer[BUFFER_SIZE];
@@ -65,62 +57,10 @@ char* read_line(int fd) {
     return line;
 }
 
-
-
-void cd(char* path) {
-    if (chdir(path) == -1) {
-        perror("Error using cd");
-        exitStatus = FAILURE;
-    }
-}
-
-
-
-void pwd() {
-    char currentWorkingDirectory[1024];
-    if (getcwd(currentWorkingDirectory, sizeof(currentWorkingDirectory)) == NULL) {
-        perror("Error using pwd");
-        exitStatus = FAILURE;
-    } else {
-        printf("%s\n", currentWorkingDirectory);
-    }
-}
-
-
-void which(char* program) {
-    // PATH is a colon-separated list of directories
-    char* path = getenv("PATH");
-
-    // break the list by colon to iterate through each directory
-    char* token = strtok(path, ":");
-    while (token != NULL) {
-        char* fullPath = malloc(strlen(token) + strlen(program) + 2); // we add 2 for the '/' and null terminator
-
-        // combine the directory and program name
-        strcpy(fullPath, token);
-        strcat(fullPath, "/");
-        strcat(fullPath, program);
-        
-        // check if file exists. if it does, print the path
-        if (access(fullPath, F_OK) == 0) {
-            printf("%s\n", fullPath);
-            return;
-        }
-
-        // reset token and move to next directory
-        token = strtok(NULL, ":");
-        free(fullPath);
-    }
-    fprintf(stderr, "Error: %s not found\n", program);
-    exitStatus = FAILURE;
-}
-
-
-
-void handleBuiltInCommands(arraylist_t* tokens) {
+void handle_built_in_commands(arraylist_t* tokens) {
     if (strcmp(al_get(tokens, 0), "exit") == 0) {
         // INCOMPLETE
-        exitStatus = SUCCESS;
+        set_exit_status(SUCCESS);
     } else if (strcmp(al_get(tokens, 0), "cd") == 0) {
         cd(al_get(tokens, 1));
     } else if (strcmp(al_get(tokens, 0), "pwd") == 0) {
@@ -132,7 +72,7 @@ void handleBuiltInCommands(arraylist_t* tokens) {
 
 
 
-void handleProgramPath(char* program, char* path) {
+void handle_program_path(char* program, char* path) {
     char* directories[] = {"/usr/local/bin", "/usr/bin", "/bin"};
     int numDirectories = sizeof(directories) / sizeof(directories[0]);
 
@@ -158,7 +98,7 @@ void handleProgramPath(char* program, char* path) {
 
 
 
-void handleWildcard(char* token, arraylist_t* tokens, int i) {
+void handle_wildcard(char* token, arraylist_t* tokens, int i) {
     // wildcard token
     glob_t glob_result;
     // initialize glob_result
@@ -181,7 +121,7 @@ void execute_command(char* command, int redirect_input, int redirect_output, cha
     pid_t pid = fork();
     if (pid == -1) {
         perror("Error forking");
-        exitStatus = FAILURE;
+        set_exit_status(FAILURE);
     } else if (pid == 0) {
         // we are inside child process
         if (redirect_input) {
@@ -241,7 +181,7 @@ void interactive_mode() {
         }
 
         // check for built-in commands
-        handleBuiltInCommands(tokens);
+        handle_built_in_commands(tokens);
 
         // check for redirection operators
         for (int i = 0; i < al_length(tokens); i++) {
