@@ -1,11 +1,5 @@
-enum {
-    SUCCESS,
-    FAILURE
-};
-
-int get_exit_status();
-void set_exit_status(int status);
-
-void cd(char* path);
+void cd(arraylist_t* tokens);
 void pwd();
-void which(char* program);
+char* handle_program_path(char* program);
+void which(arraylist_t* tokens);
+void exit_shell(arraylist_t* tokens);

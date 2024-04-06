@@ -7,6 +7,7 @@
 #include <glob.h>
 #include "arraylist.h"
 #include "commands.h"
+#include "status.h"
 
 #define BUFFER_SIZE 1024
 
@@ -59,41 +60,14 @@ char* read_line(int fd) {
 
 void handle_built_in_commands(arraylist_t* tokens) {
     if (strcmp(al_get(tokens, 0), "exit") == 0) {
-        // INCOMPLETE
-        set_exit_status(SUCCESS);
+        exit_shell(tokens);
     } else if (strcmp(al_get(tokens, 0), "cd") == 0) {
-        cd(al_get(tokens, 1));
+        cd(tokens);
     } else if (strcmp(al_get(tokens, 0), "pwd") == 0) {
         pwd();
     } else if (strcmp(al_get(tokens, 0), "which") == 0) {
-        which(al_get(tokens, 1));
+        which(tokens);
     }
-}
-
-
-
-void handle_program_path(char* program, char* path) {
-    char* directories[] = {"/usr/local/bin", "/usr/bin", "/bin"};
-    int numDirectories = sizeof(directories) / sizeof(directories[0]);
-
-    // check if the program contains a slash, ex ./myprogram
-    if (strchr(program, '/') != NULL) {
-        strcpy(path, program);
-        return;
-    }
-
-    // handle case when there is no slash, ex. myprogram. in this case, we look through directories[] to find the program
-    for (int i = 0; i < numDirectories; i++) {
-        if (access(directories[i], F_OK) == 0) {
-            strcpy(path, directories[i]);
-            strcat(path, "/");
-            strcat(path, program);
-            return;
-        }
-    }
-
-    // program wasn't found, so leave path empty
-    path[0] = '\0';
 }
 
 
