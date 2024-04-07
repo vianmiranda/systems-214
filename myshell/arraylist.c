@@ -11,7 +11,16 @@
 arraylist_t* al_init(unsigned size)
 {
     arraylist_t* L = malloc(sizeof(arraylist_t));
+    if (L == NULL) {
+        perror("Error allocating memory");
+        return NULL;
+    }
     L->data = malloc(size * sizeof(char*));
+    if (L->data == NULL) {
+        perror("Error allocating memory");
+        free(L);
+        return NULL;
+    }
     L->length = 0;
     L->capacity = size;
 

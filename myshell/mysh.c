@@ -15,6 +15,108 @@ const char* PROMPT      = "mysh> ";
 const char* WELCOME_MSG = "Welcome to mysh!\n";
 const char* EXIT_MSG    = "Exiting mysh...\n";
 
+typedef struct {
+    char* program;
+    arraylist_t* arguments; 
+    arraylist_t* redir_inputs; // Anything succeeding '<'
+    arraylist_t* redir_outputs;  // Anything succeeding '>'
+} command;
+
+command* command_init(char* program) {
+    command* com = malloc(sizeof(command));
+    if (com == NULL) {
+        perror("Error allocating memory");
+        return NULL;
+    }
+    com->program = malloc(strlen(program) + 1);
+    if (com->program == NULL) {
+        perror("Error allocating memory");
+        free(com);
+        return NULL;
+    }
+    com->arguments = al_init(10);
+    if (com->arguments == NULL) {
+        free(com);
+        free(com->program);
+        return NULL;
+    }
+    com->redir_inputs = al_init(10);    
+    if (com->redir_inputs == NULL) {
+        free(com);
+        free(com->program);
+        free(com->arguments);
+        return NULL;
+    }
+    com->redir_outputs = al_init(10);
+    if (com->redir_outputs == NULL) {
+        free(com);
+        free(com->program);
+        free(com->arguments);
+        free(com->redir_inputs);
+        return NULL;
+    }
+
+    return com;
+}
+
+void command_destroy(command* com) {
+    free(com->redir_outputs);
+    free(com->redir_inputs);
+    free(com->arguments);
+    free(com->program);
+    free(com);
+}
+
+void command_populate(command* com, arraylist_t* tokens, int start, int end) {
+    // NOTE: this only makes shallow copies of the strings; therefore, if any changes are 
+    // made to a string in the original tokens arraylist, the same changes will be reflected
+    // in its copy in com
+    com->program = al_get(tokens, 0);
+    for (int i = 1; i < end; i++) {
+        if (strncmp(al_get(tokens, i), "<", 1) == 0) {
+            if (i + 1 < end) {
+                al_push(com->redir_inputs, al_get(tokens, i + 1));
+                i++;
+            } else {
+                set_exit_status(FAILURE);
+                fprintf(stderr, "No input file provided.");
+                return;
+            }
+        } else if (strncmp(al_get(tokens, i), ">", 1) == 0) {
+            if (i + 1 < end) {
+                al_push(com->redir_outputs, al_get(tokens, i + 1));
+                i++;
+            } else {
+                set_exit_status(FAILURE);
+                fprintf(stderr, "No output file provided.");
+                return;
+            }
+        } else {
+            al_push(com->arguments, al_get(tokens, i));
+        }
+    }
+}
+
+char* read_line(int fd) {
+    char* line = malloc(0);
+    char buffer[BUFFER_SIZE];
+    ssize_t bytesRead;
+    while ((bytesRead = read(fd, buffer, BUFFER_SIZE)) > 0) {
+        char* newlineChar = strchr(buffer, '\n');
+        if (newlineChar != NULL) {
+            *newlineChar = '\0';
+            line = realloc(line, strlen(line) + strlen(buffer) + 1);
+            strncat(line, buffer, strlen(buffer));
+            break;
+        } else {
+            line = realloc(line, strlen(line) + BUFFER_SIZE + 1);
+            strncat(line, buffer, BUFFER_SIZE);
+            line[strlen(line) + BUFFER_SIZE] = '\0';
+        }
+    }
+    return line;
+}
+
 // tokenize the line into tokens
 arraylist_t* tokenize(char* line) {
     char* token = strtok(line, " ");
@@ -39,40 +141,7 @@ arraylist_t* tokenize(char* line) {
     return list;
 }
 
-
-char* read_line(int fd) {
-    char* line = malloc(0);
-    char buffer[BUFFER_SIZE];
-    ssize_t bytesRead;
-    while ((bytesRead = read(fd, buffer, BUFFER_SIZE)) > 0) {
-        char* newlineChar = strchr(buffer, '\n');
-        if (newlineChar != NULL) {
-            *newlineChar = '\0';
-            line = realloc(line, strlen(line) + strlen(buffer) + 1);
-            strncat(line, buffer, strlen(buffer));
-            break;
-        } else {
-            line = realloc(line, strlen(line) + BUFFER_SIZE + 1);
-            strncat(line, buffer, BUFFER_SIZE);
-            line[strlen(line) + BUFFER_SIZE] = '\0';
-        }
-    }
-    return line;
-}
-
-void handle_built_in_commands(arraylist_t* tokens) {
-    if (strcmp(al_get(tokens, 0), "exit") == 0) {
-        exit_shell(tokens);
-    } else if (strcmp(al_get(tokens, 0), "cd") == 0) {
-        cd(tokens);
-    } else if (strcmp(al_get(tokens, 0), "pwd") == 0) {
-        pwd();
-    } else if (strcmp(al_get(tokens, 0), "which") == 0) {
-        which(tokens);
-    }
-}
-
-void handle_wildcard(char* token, arraylist_t* tokens, int pos) {
+void wildcard_expansion(char* token, arraylist_t* tokens, int pos) {
     // wildcard token
     glob_t* glob_result;
 
@@ -89,9 +158,25 @@ void handle_wildcard(char* token, arraylist_t* tokens, int pos) {
     globfree(glob_result);   
 }
 
+int handle_built_in_commands(arraylist_t* tokens) {
+    if (strcmp(al_get(tokens, 0), "exit") == 0) {
+        exit_shell(tokens);
+        return 1;
+    } else if (strcmp(al_get(tokens, 0), "cd") == 0) {
+        cd(tokens);
+        return 1;
+    } else if (strcmp(al_get(tokens, 0), "pwd") == 0) {
+        pwd();
+        return 1;
+    } else if (strcmp(al_get(tokens, 0), "which") == 0) {
+        which(tokens);
+        return 1;
+    }
 
+    return 0;
+}
 
-void execute_command(char* command, int redirect_input, int redirect_output, char* inputFile, char* outputFile) {
+void execute_command(command* com) {
     
     // fork
     pid_t pid = fork();
@@ -100,15 +185,10 @@ void execute_command(char* command, int redirect_input, int redirect_output, cha
         set_exit_status(FAILURE);
     } else if (pid == 0) {
         // we are inside child process
-        if (redirect_input) {
 
-        }
+        // handle input redirection
+        
 
-        if (redirect_output) {
-
-        }
-
-        // execute command
 
     } else {
         // parent process
@@ -116,77 +196,78 @@ void execute_command(char* command, int redirect_input, int redirect_output, cha
         wait(&status);
         // handle status
     }
+
+    // a > b > c
+}
+
+void parse_and_execute(int fd) {
+    char* line = read_line(STDIN_FILENO);
+    arraylist_t* tokens = tokenize(line);
+
+    // check for conditionals (then, else)
+    if (strcmp(al_get(tokens, 0), "then") == 0) {
+        // check if the previous command was successful
+        if (get_exit_status() == SUCCESS) {
+            al_remove(tokens, 0, NULL);
+        } else {
+            return;
+        }
+
+    } else if (strcmp(al_get(tokens, 0), "else") == 0) {
+        // check if the previous command was not successful            
+        if (get_exit_status() == FAILURE) {
+            al_remove(tokens, 0, NULL);
+        } else {
+            return;
+        }
+    }
+
+    // wildcard expansion
+    for (int i = 0; i < al_length(tokens); i++) {
+        wildcard_expansion(al_get(tokens, i), tokens, i);
+    }
+
+    // find pipeline index. if no pipeline, just create 1 command
+    // if pipeline exists, create command for before and after
+    int pipelineIndex = -1;
+    for (int i = 0; i < al_length(tokens); i++) {
+        if (strncmp(al_get(tokens, i), "|", 1) == 0) {
+            pipelineIndex = i;
+            break;
+        }
+    }
+
+    if (pipelineIndex == -1) {
+        command* com = command_init(al_get(tokens, 0));
+        command_populate(com, tokens, 0, al_length(tokens));
+        execute_command(com);
+    } else {
+        command* com1 = command_init(al_get(tokens, 0));
+        command* com2 = command_init(al_get(tokens, 0));
+        command_populate(com1, tokens, 0, pipelineIndex);
+        command_populate(com2, tokens, pipelineIndex + 1, al_length(tokens));    
+        execute_command(com1);
+        execute_command(com2);
+    }
 }
 
 
-
 void batch_mode(int fd) {
+
+
+    parse_and_execute(fd); // TODO: make it run till fd is read
 }
 
 
 
 void interactive_mode() {
-
-    // to keep track of the commands, especially for pipelines
-    arraylist_t* commands;
-    int commandCount = 0;
-
-    // input and output file
-    char* inputFile = NULL, outputFile = NULL;
-
-    // to keep track of the status of redirection operators
-    int redirect_input = 0, redirect_output = 0;
-
-    // pipe status
-    int pipeStatus = 0;
-
-
     printf("%s\n", WELCOME_MSG);
-
     while (1) {
         printf("%s\n", PROMPT);
-        char* line = read_line(STDIN_FILENO);
-        arraylist_t* tokens = tokenize(line);
-
-        // check for conditionals (then, else)
-        if (strcmp(al_get(tokens, 0), "then") == 0) {
-            // check if the previous command was successful
-
-        } else if (strcmp(al_get(tokens, 0), "else") == 0) {
-            // check if the previous command was not successful
-        }
-
-        // check for built-in commands
-        handle_built_in_commands(tokens);
-
-        // check for redirection operators
-        for (int i = 0; i < al_length(tokens); i++) {
-            if (strcmp(al_get(tokens, i), "<") == 0) {
-                redirect_input = 1;
-                // get input file
-                
-            } else if (strcmp(al_get(tokens, i), ">") == 0) {
-                redirect_output = 1;
-                // get output file
-            } else if (strcmp(al_get(tokens, i), "|") == 0) {
-                // handle pipe
-                pipeStatus = 1;
-
-
-            }
-        }
-
-        // execute command in pipeline
-        for (int i = 0; i <= commandCount; i++) {
-            execute_command(al_get(commands, i), redirect_input, redirect_output, inputFile, outputFile);
-        }
-
+        parse_and_execute(STDIN_FILENO);
     }
-
     printf("%s\n", EXIT_MSG);
 }
-
-
 
 int main(int argc, char** argv) {
     // char line[] = "ls -l | wc -l";
