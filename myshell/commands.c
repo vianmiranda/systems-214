@@ -58,7 +58,7 @@ char* handle_program_path(char* program) {
     const char* directories[] = {"/usr/local/bin", "/usr/bin", "/bin"};
     int numDirectories = sizeof(directories) / sizeof(directories[0]);
 
-    size_t pathLength = strlen(program) + 1 + 14; // 1 for null terminator, 14 for "/usr/local/bin"
+    size_t pathLength = strlen(program) + 1 + 1 + 14; // 1 for null terminator, 1 for '/', 14 for "/usr/local/bin"
     char* path = malloc(pathLength); 
 
     // check if the program contains a slash, ex ./myprogram
