@@ -136,11 +136,17 @@ char* read_line(input_stream *stream) {
 
 		    stream->len = read(stream->fd, stream->buffer, BUFFER_SIZE);
 
-		    if (stream->len < 1) {
+		    if (stream->len == 0) {
 				close(stream->fd);
 				stream->fd = -1;
 				return line;
-		    }
+		    } else if (stream->len == -1) {
+                perror("Error reading from file");
+                close(stream->fd);
+                stream->fd = -1;
+                set_exit_status(FAILURE);
+                return NULL;
+            }
 
 		    stream->pos = 0;
 		    segment_start = 0;
@@ -201,7 +207,6 @@ int wildcard_expansion(arraylist_t* tokens, int pos) {
         for (; ret < glob_result.gl_pathc; ret++) {
             // push at i + j + 1 to maintain proper order
             al_insert(tokens, pos + ret, glob_result.gl_pathv[ret]);
-            printf("%s\n\n\n", al_get(tokens, pos + ret));
         }
     } else {
         fprintf(stderr, "Error in globbing\n");
@@ -260,17 +265,34 @@ void execute_command(command* com, int pipeStatus, int pipefd) {
     if (pipeStatus == PIPE_WRITE) dup2(pipefd, STDOUT_FILENO);
 
     if (handle_built_in_commands(com->program, com->arguments) == 0) {
-        if (execv(com->program, com->arguments->data) == -1) {
+        char* args[al_length(com->arguments) + 2];
+        args[0] = com->program;
+        for (int i = 1; i <= al_length(com->arguments); i++) {
+            args[i] = com->arguments->data[i - 1];
+        }
+        args[al_length(com->arguments) + 1] = NULL;
+
+        if (execv(com->program, args) == -1) {
             set_exit_status(FAILURE);
+            perror("Error executing command\n");
         } else {
             set_exit_status(SUCCESS);
+            printf("success\n");
         }
     }
 }
 
 void parse_and_execute(input_stream* stream) {
     char* line = read_line(stream);
+    if (line == NULL) {
+        return;
+    }
     arraylist_t* tokens = tokenize(line);
+    // for (int i = 0; i < al_length(tokens); i++) {
+    //     printf("%s\n", al_get(tokens, i));
+    // }
+    // printf("\n");
+    free(line);
 
     // check for conditionals (then, else)
     if (strcmp(al_get(tokens, 0), "then") == 0) {
@@ -307,7 +329,10 @@ void parse_and_execute(input_stream* stream) {
 
     if (pipelineIndex == -1) {
         //make child process
-        al_set(tokens, 0, handle_program_path(al_get(tokens, 0)));
+        char* progPath = handle_program_path(al_get(tokens, 0));
+        al_set(tokens, 0, progPath);
+        free(progPath);
+
         pid_t child = fork();
         if (child == -1) {
             perror("Error forking");
@@ -323,8 +348,13 @@ void parse_and_execute(input_stream* stream) {
             wait(NULL);
         }
     } else {
-        al_set(tokens, 0, handle_program_path(al_get(tokens, 0)));
-        al_set(tokens, pipelineIndex + 1, handle_program_path(al_get(tokens, pipelineIndex + 1)));
+        char* progPath1 = handle_program_path(al_get(tokens, 0));
+        al_set(tokens, 0, progPath1);
+        free(progPath1);
+        char* progPath2 = handle_program_path(al_get(tokens, pipelineIndex + 1));
+        al_set(tokens, pipelineIndex + 1, progPath2);
+        free(progPath2);
+
         int pipefd[2]; // pipefd[0] = read, pipefd[1] = write
         if (pipe(pipefd) == -1) {
             perror("Error creating pipe");
@@ -371,6 +401,7 @@ void batch_mode(int fd) {
     while (stream->fd != -1) {
         parse_and_execute(stream);        
     }   
+    free(stream);
 }
 
 void interactive_mode() {
@@ -380,21 +411,11 @@ void interactive_mode() {
         printf("%s", PROMPT);
         parse_and_execute(stream);
     }
+    free(stream);
     printf("%s\n", EXIT_MSG);
 }
 
 int main(int argc, char** argv) {
-    // char line[] = "ls -l | wc -l";
-    // printf("%s\n", line);
-    // arraylist_t* tokens = tokenize(line);
-
-    // // print the tokens
-    // for (int i = 0; i < al_length(tokens); i++) {
-    //     printf("%s\n", al_get(tokens, i));
-    // }
-
-    // al_destroy(tokens);
-    
     int systemInput = isatty(STDIN_FILENO);
 
     // argc == 1 and systemInput == 1 means interactive mode

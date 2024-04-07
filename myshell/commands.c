@@ -77,7 +77,7 @@ char* handle_program_path(char* program) {
     // // program wasn't found, so leave path empty
     // memset(path, 0, pathLength);
     // return path;
-    free(path);
+    strncpy(path, program, strlen(program) + 1);
     return program;
 }
 
