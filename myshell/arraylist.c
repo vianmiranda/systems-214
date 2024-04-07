@@ -98,6 +98,9 @@ void al_insert(arraylist_t* L, int pos, char* item)
         L->data = temp;
         if (DEBUG) printf("Resized array to %u\n", L->capacity);
     }
+
+    char copy[strlen(item) + 1]; // we make a copy incase item is a string later in the arraylist
+    memcpy(copy, item, strlen(item) + 1);
     
     for (int i = L->length; i > pos; i--) {
         if (i == L->length) {
@@ -113,17 +116,17 @@ void al_insert(arraylist_t* L, int pos, char* item)
     }
     
     if (pos == L->length) {
-        L->data[pos] = malloc(strlen(item) + 1);
+        L->data[pos] = malloc(sizeof(copy));
     } else {
-        L->data[pos] = realloc(L->data[pos], strlen(item) + 1);
+        L->data[pos] = realloc(L->data[pos], sizeof(copy));
     }
     if (L->data[pos] == NULL) {
         fprintf(stderr, "Out of memory!\n");
         exit(EXIT_FAILURE);
     }
-    memcpy(L->data[pos], item, strlen(item) + 1);
+    memcpy(L->data[pos], copy, strlen(item) + 1);
     L->length++;
-    free(item);
+    if (strcmp(copy, item) == 0) free(item);
 }
 
 // returns 1 on success and writes popped item to dest
@@ -165,6 +168,7 @@ void al_set(arraylist_t* L, int pos, char* item)
         fprintf(stderr, "Index out of bounds\n");
         exit(EXIT_FAILURE);
     } else {
+        if (item == L->data[pos]) return;
         L->data[pos] = realloc(L->data[pos], strlen(item) + 1);
         if (L->data[pos] == NULL) {
             fprintf(stderr, "Out of memory!\n");

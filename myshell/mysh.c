@@ -12,6 +12,8 @@
 
 #define BUFFER_SIZE 1024
 
+enum { NO_PIPE, PIPE_READ, PIPE_WRITE };
+
 const char* PROMPT      = "mysh> ";
 const char* WELCOME_MSG = "Welcome to mysh!\n";
 const char* EXIT_MSG    = "Exiting mysh...\n";
@@ -76,6 +78,7 @@ void command_destroy(command* com) {
     free(com);
 }
 
+// TODO: fix this function not properly adding args
 void command_populate(command* com, arraylist_t* tokens, int start, int end) {
     // NOTE: this only makes shallow copies of the strings; therefore, if any changes are 
     // made to a string in the original tokens arraylist, the same changes will be reflected
@@ -227,29 +230,43 @@ int handle_built_in_commands(char* program, arraylist_t* args) {
     return 0;
 }
 
-// void execute_command(command* com) {
+
+void execute_command(command* com, int pipeStatus, int pipefd) {
+    if (al_length(com->redir_inputs) > 0) {
+        int in = open(al_get(com->redir_inputs, al_length(com->redir_inputs) - 1), O_RDONLY);
+        if (in == -1) {
+            perror("Error opening input file");
+            set_exit_status(FAILURE);
+        }
+        dup2(in, STDIN_FILENO);
+        close(in);
+    }
+
+    if (pipeStatus == PIPE_READ) dup2(pipefd, STDIN_FILENO);
     
-//     // fork
-//     pid_t pid = fork();
-//     if (pid == -1) {
-//         perror("Error forking");
-//         set_exit_status(FAILURE);
-//     } else if (pid == 0) {
-//         // we are inside child process
+    if (al_length(com->redir_outputs) > 0) {
+        int out;
+        for (int i = 0; i < al_length(com->redir_outputs); i++) {
+            out = open(al_get(com->redir_outputs, i), O_CREAT | O_WRONLY | O_TRUNC, 0640);
+            if (out == -1) {
+                perror("Error opening output file");
+                set_exit_status(FAILURE);
+            }
+        }
+        dup2(out, STDOUT_FILENO);
+        close(out);
+    }
+    
+    if (pipeStatus == PIPE_WRITE) dup2(pipefd, STDOUT_FILENO);
 
-//         // handle input redirection
-        
-
-
-//     } else {
-//         // parent process
-//         int status;
-//         wait(&status);
-//         // handle status
-//     }
-
-//     // a > b > c
-// }
+    if (handle_built_in_commands(com->program, com->arguments) == 0) {
+        if (execv(com->program, com->arguments->data) == -1) {
+            set_exit_status(FAILURE);
+        } else {
+            set_exit_status(SUCCESS);
+        }
+    }
+}
 
 void parse_and_execute(input_stream* stream) {
     char* line = read_line(stream);
@@ -299,38 +316,7 @@ void parse_and_execute(input_stream* stream) {
             // inside child process
             command* com = command_init(al_get(tokens, 0));
             command_populate(com, tokens, 0, al_length(tokens));
-
-            if (al_length(com->redir_inputs) > 0) {
-                int in = open(al_get(com->redir_inputs, al_length(com->redir_inputs) - 1), O_RDONLY);
-                if (in == -1) {
-                    perror("Error opening input file");
-                    set_exit_status(FAILURE);
-                }
-                dup2(in, STDIN_FILENO);
-                close(in);
-            }
-            
-            if (al_length(com->redir_outputs) > 0) {
-                int out;
-                for (int i = 0; i < al_length(com->redir_outputs); i++) {
-                    out = open(al_get(com->redir_outputs, i), O_CREAT | O_WRONLY | O_TRUNC, 0640);
-                    if (out == -1) {
-                        perror("Error opening output file");
-                        set_exit_status(FAILURE);
-                    }
-                }
-                dup2(out, STDOUT_FILENO);
-                close(out);
-            }
-
-            printf("%s", com->program);
-            if (handle_built_in_commands(com->program, com->arguments) == 0) {
-                if (execv(com->program, com->arguments->data) == -1) {
-                    set_exit_status(FAILURE);
-                } else {
-                    set_exit_status(SUCCESS);
-                }
-            }
+            execute_command(com, NO_PIPE, 0);
             command_destroy(com);
         } else {
             // inside parent process
@@ -354,39 +340,7 @@ void parse_and_execute(input_stream* stream) {
         } else if (child1 == 0) {
             command* com1 = command_init(al_get(tokens, 0));
             command_populate(com1, tokens, 0, pipelineIndex);
-                
-            if (al_length(com1->redir_inputs) > 0) {
-                int in = open(al_get(com1->redir_inputs, al_length(com1->redir_inputs) - 1), O_RDONLY);
-                if (in == -1) {
-                    perror("Error opening input file");
-                    set_exit_status(FAILURE);
-                }
-                dup2(in, STDIN_FILENO);
-                close(in);
-            }
-            
-            if (al_length(com1->redir_outputs) > 0) {
-                int out;
-                for (int i = 0; i < al_length(com1->redir_outputs); i++) {
-                    out = open(al_get(com1->redir_outputs, i), O_CREAT | O_WRONLY | O_TRUNC, 0640);
-                    if (out == -1) {
-                        perror("Error opening output file");
-                        set_exit_status(FAILURE);
-                    }
-                }
-                dup2(out, STDOUT_FILENO);
-                close(out);
-            }
-            
-            dup2(pipefd[1], STDOUT_FILENO);
-
-            if (handle_built_in_commands(com1->program, com1->arguments) == 0) {
-                if (execv(com1->program, com1->arguments->data) == -1) {
-                    set_exit_status(FAILURE);
-                } else {
-                    set_exit_status(SUCCESS);
-                }
-            }
+            execute_command(com1, PIPE_WRITE, pipefd[1]);
             command_destroy(com1);
         } 
 
@@ -397,39 +351,7 @@ void parse_and_execute(input_stream* stream) {
         } else if (child2 == 0) {
             command* com2 = command_init(al_get(tokens, 0));
             command_populate(com2, tokens, pipelineIndex + 1, al_length(tokens));
-                
-            if (al_length(com2->redir_inputs) > 0) {
-                int in = open(al_get(com2->redir_inputs, al_length(com2->redir_inputs) - 1), O_RDONLY);
-                if (in == -1) {
-                    perror("Error opening input file");
-                    set_exit_status(FAILURE);
-                }
-                dup2(in, STDIN_FILENO);
-                close(in);
-            }
-
-            dup2(pipefd[0], STDIN_FILENO);
-            
-            if (al_length(com2->redir_outputs) > 0) {
-                int out;
-                for (int i = 0; i < al_length(com2->redir_outputs); i++) {
-                    out = open(al_get(com2->redir_outputs, i), O_CREAT | O_WRONLY | O_TRUNC, 0640);
-                    if (out == -1) {
-                        perror("Error opening output file");
-                        set_exit_status(FAILURE);
-                    }
-                }
-                dup2(out, STDOUT_FILENO);
-                close(out);
-            }
-
-            if (handle_built_in_commands(com2->program, com2->arguments) == 0) {
-                if (execv(com2->program, com2->arguments->data) == -1) {
-                    set_exit_status(FAILURE);
-                } else {
-                    set_exit_status(SUCCESS);
-                }
-            }
+            execute_command(com2, PIPE_READ, pipefd[0]);
             command_destroy(com2);
         }
 
