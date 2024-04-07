@@ -74,6 +74,7 @@ void al_push(arraylist_t* L, char* item)
     }
     memcpy(L->data[L->length], item, strlen(item) + 1);
     L->length++;
+    free(item);
 }
 
 
@@ -122,6 +123,7 @@ void al_insert(arraylist_t* L, int pos, char* item)
     }
     memcpy(L->data[pos], item, strlen(item) + 1);
     L->length++;
+    free(item);
 }
 
 // returns 1 on success and writes popped item to dest
@@ -169,5 +171,6 @@ void al_set(arraylist_t* L, int pos, char* item)
             exit(EXIT_FAILURE);
         }
         memcpy(L->data[pos], item, strlen(item) + 1);
+        free(item);
     }
 }

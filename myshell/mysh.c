@@ -69,9 +69,9 @@ command* command_init(char* program) {
 }
 
 void command_destroy(command* com) {
-    free(com->redir_outputs);
-    free(com->redir_inputs);
-    free(com->arguments);
+    al_destroy(com->redir_outputs);
+    al_destroy(com->redir_inputs);
+    al_destroy(com->arguments);
     free(com->program);
     free(com);
 }
@@ -80,7 +80,7 @@ void command_populate(command* com, arraylist_t* tokens, int start, int end) {
     // NOTE: this only makes shallow copies of the strings; therefore, if any changes are 
     // made to a string in the original tokens arraylist, the same changes will be reflected
     // in its copy in com
-    com->program = al_get(tokens, 0);
+    memcpy(com->program, al_get(tokens, 0), strlen(al_get(tokens, 0)) + 1);
     for (int i = 1; i < end; i++) {
         if (strncmp(al_get(tokens, i), "<", 1) == 0) {
             if (i + 1 < end) {
@@ -251,8 +251,7 @@ int handle_built_in_commands(char* program, arraylist_t* args) {
 //     // a > b > c
 // }
 
-void parse_and_execute(int fd) {
-    input_stream* stream = input_stream_init(fd);
+void parse_and_execute(input_stream* stream) {
     char* line = read_line(stream);
     arraylist_t* tokens = tokenize(line);
 
@@ -289,10 +288,9 @@ void parse_and_execute(int fd) {
         }
     }
 
-    al_set(tokens, 0, handle_program_path(al_get(tokens, 0)));
-
     if (pipelineIndex == -1) {
         //make child process
+        al_set(tokens, 0, handle_program_path(al_get(tokens, 0)));
         pid_t child = fork();
         if (child == -1) {
             perror("Error forking");
@@ -325,6 +323,7 @@ void parse_and_execute(int fd) {
                 close(out);
             }
 
+            printf("%s", com->program);
             if (handle_built_in_commands(com->program, com->arguments) == 0) {
                 if (execv(com->program, com->arguments->data) == -1) {
                     set_exit_status(FAILURE);
@@ -338,6 +337,8 @@ void parse_and_execute(int fd) {
             wait(NULL);
         }
     } else {
+        al_set(tokens, 0, handle_program_path(al_get(tokens, 0)));
+        al_set(tokens, pipelineIndex + 1, handle_program_path(al_get(tokens, pipelineIndex + 1)));
         int pipefd[2]; // pipefd[0] = read, pipefd[1] = write
         if (pipe(pipefd) == -1) {
             perror("Error creating pipe");
@@ -395,7 +396,7 @@ void parse_and_execute(int fd) {
             set_exit_status(FAILURE);
         } else if (child2 == 0) {
             command* com2 = command_init(al_get(tokens, 0));
-            command_populate(com2, tokens, 0, pipelineIndex);
+            command_populate(com2, tokens, pipelineIndex + 1, al_length(tokens));
                 
             if (al_length(com2->redir_inputs) > 0) {
                 int in = open(al_get(com2->redir_inputs, al_length(com2->redir_inputs) - 1), O_RDONLY);
@@ -438,33 +439,24 @@ void parse_and_execute(int fd) {
         wait(NULL);
         wait(NULL);
     }
+    al_destroy(tokens);
 }
 
 
 // iterate through all the lines in the file and parse and execute each line
 void batch_mode(int fd) {
-    char* line;
-    
-    if (fd == -1) {
-        perror("Error opening file");
-        set_exit_status(FAILURE);
-    }
-
-    /* 
-        Iterate through each line
-        parse_and_execute each line , only thing is parse_and_execute takes in file descriptor and not the line
-    */
-
-        
+    input_stream* stream = input_stream_init(fd);
+    while (stream->fd != -1) {
+        parse_and_execute(stream);        
+    }   
 }
-
-
 
 void interactive_mode() {
     printf("%s\n", WELCOME_MSG);
+    input_stream* stream = input_stream_init(STDIN_FILENO);
     while (1) {
         printf("%s", PROMPT);
-        parse_and_execute(STDIN_FILENO);
+        parse_and_execute(stream);
     }
     printf("%s\n", EXIT_MSG);
 }

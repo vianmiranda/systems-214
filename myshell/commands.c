@@ -74,10 +74,11 @@ char* handle_program_path(char* program) {
             return path;
         }
     }
-
-    // program wasn't found, so leave path empty
-    memset(path, 0, pathLength);
-    return path;
+    // // program wasn't found, so leave path empty
+    // memset(path, 0, pathLength);
+    // return path;
+    free(path);
+    return program;
 }
 
 /**
