@@ -113,6 +113,7 @@ input_stream* input_stream_init(int fd) {
     str->len = 0;
 }
 
+
 char* read_line(input_stream *stream) {
     if (stream->fd < 0) return NULL;
 
@@ -182,35 +183,44 @@ arraylist_t* tokenize(char* line) {
     return list;
 }
 
-void wildcard_expansion(char* token, arraylist_t* tokens, int pos) {
+int wildcard_expansion(arraylist_t* tokens, int pos) {
     // wildcard token
-    glob_t* glob_result;
+    if (strchr(al_get(tokens, pos), '*') == NULL) return 0;
+
+    glob_t glob_result;
+    int ret = 0;
 
     // expand wildcard and add each match to token list
     // GLOB_NOCHECK: if wildcard does not match any files, this returns the original token and is added to the list
-    if (glob(token, GLOB_NOCHECK, NULL, glob_result) == 0) {
+    if (glob(al_get(tokens, pos), GLOB_NOCHECK, NULL, &glob_result) == 0) {
         // remove element at pos from arraylist
         al_remove(tokens, pos, NULL);
-        for (int j = 0; j < (int) glob_result->gl_pathc; j++) {
+        for (; ret < glob_result.gl_pathc; ret++) {
             // push at i + j + 1 to maintain proper order
-            al_put(tokens, pos + j, glob_result->gl_pathv[j]);
+            al_insert(tokens, pos + ret, glob_result.gl_pathv[ret]);
+            printf("%s\n\n\n", al_get(tokens, pos + ret));
         }
+    } else {
+        fprintf(stderr, "Error in globbing\n");
+        set_exit_status(FAILURE);
+        return al_length(tokens);
     }
-    globfree(glob_result);   
+    globfree(&glob_result);   
+    return ret - 1;
 }
 
-int handle_built_in_commands(arraylist_t* tokens) {
-    if (strcmp(al_get(tokens, 0), "exit") == 0) {
-        exit_shell(tokens);
+int handle_built_in_commands(char* program, arraylist_t* args) {
+    if (strcmp(program, "exit") == 0) {
+        exit_shell(args);
         return 1;
-    } else if (strcmp(al_get(tokens, 0), "cd") == 0) {
-        cd(tokens);
+    } else if (strcmp(program, "cd") == 0) {
+        cd(args);
         return 1;
-    } else if (strcmp(al_get(tokens, 0), "pwd") == 0) {
+    } else if (strcmp(program, "pwd") == 0) {
         pwd();
         return 1;
-    } else if (strcmp(al_get(tokens, 0), "which") == 0) {
-        which(tokens);
+    } else if (strcmp(program, "which") == 0) {
+        which(args);
         return 1;
     }
 
@@ -266,7 +276,7 @@ void parse_and_execute(int fd) {
 
     // wildcard expansion
     for (int i = 0; i < al_length(tokens); i++) {
-        wildcard_expansion(al_get(tokens, i), tokens, i);
+        i += wildcard_expansion(tokens, i);
     }
 
     // find pipeline index. if no pipeline, just create 1 command
@@ -315,10 +325,12 @@ void parse_and_execute(int fd) {
                 close(out);
             }
 
-            if (execv(com->program, com->arguments->data) == -1) {
-                set_exit_status(FAILURE);
-            } else {
-                set_exit_status(SUCCESS);
+            if (handle_built_in_commands(com->program, com->arguments) == 0) {
+                if (execv(com->program, com->arguments->data) == -1) {
+                    set_exit_status(FAILURE);
+                } else {
+                    set_exit_status(SUCCESS);
+                }
             }
             command_destroy(com);
         } else {
@@ -367,10 +379,12 @@ void parse_and_execute(int fd) {
             
             dup2(pipefd[1], STDOUT_FILENO);
 
-            if (execv(com1->program, com1->arguments->data) == -1) {
-                set_exit_status(FAILURE);
-            } else {
-                set_exit_status(SUCCESS);
+            if (handle_built_in_commands(com1->program, com1->arguments) == 0) {
+                if (execv(com1->program, com1->arguments->data) == -1) {
+                    set_exit_status(FAILURE);
+                } else {
+                    set_exit_status(SUCCESS);
+                }
             }
             command_destroy(com1);
         } 
@@ -408,13 +422,13 @@ void parse_and_execute(int fd) {
                 close(out);
             }
 
-            
-            if (execv(com2->program, com2->arguments->data) == -1) {
-                set_exit_status(FAILURE);
-            } else {
-                set_exit_status(SUCCESS);
+            if (handle_built_in_commands(com2->program, com2->arguments) == 0) {
+                if (execv(com2->program, com2->arguments->data) == -1) {
+                    set_exit_status(FAILURE);
+                } else {
+                    set_exit_status(SUCCESS);
+                }
             }
-            
             command_destroy(com2);
         }
 

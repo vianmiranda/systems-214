@@ -9,16 +9,16 @@
 #define BUFFER_SIZE 1024
 
 void cd(arraylist_t* tokens) {
-    if (al_length(tokens) == 1) {
+    if (al_length(tokens) == 0) {
         fprintf(stderr, "Error: cd requires an argument\n");
         set_exit_status(FAILURE);
         return;
-    } else if (al_length(tokens) > 2) {
+    } else if (al_length(tokens) > 1) {
         fprintf(stderr, "Error: cd only accepts one argument\n");
         set_exit_status(FAILURE);
         return;
     }
-    char* path = al_get(tokens, 1);
+    char* path = al_get(tokens, 0);
     if (chdir(path) == -1) {
         perror("Error using cd");
         set_exit_status(FAILURE);
@@ -86,15 +86,15 @@ char* handle_program_path(char* program) {
  * NOTE: does not print anything upon error status
 */
 void which(arraylist_t* tokens) {
-    if (al_length(tokens) == 1) {
+    if (al_length(tokens) == 0) {
         set_exit_status(FAILURE);
         return;
-    } else if (al_length(tokens) > 2) {
+    } else if (al_length(tokens) > 1) {
         set_exit_status(FAILURE);
         return;
     }
 
-    char* program = al_get(tokens, 1);
+    char* program = al_get(tokens, 0);
     char* path = handle_program_path(program);
     if (strlen(program) == strlen(path) || strlen(path) == 0) {
         free(path);
@@ -107,8 +107,8 @@ void which(arraylist_t* tokens) {
 }
 
 void exit_shell(arraylist_t* tokens) {
-    if (al_length(tokens) > 1) {
-        for (int i = 1; i < al_length(tokens); i++) {
+    if (al_length(tokens) > 0) {
+        for (int i = 0; i < al_length(tokens); i++) {
             printf("%s ", al_get(tokens, i));
         }
     }
