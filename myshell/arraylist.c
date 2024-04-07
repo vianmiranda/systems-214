@@ -143,3 +143,14 @@ int al_remove(arraylist_t* L, int pos, char** dest)
     
     return 1;
 }
+
+void al_set(arraylist_t* L, int pos, char* item)
+{
+    if (pos >= L->length) {
+        fprintf(stderr, "Index out of bounds\n");
+        exit(EXIT_FAILURE);
+    } else {
+        al_remove(L, pos, NULL);
+        al_put(L, pos, item);
+    }
+}

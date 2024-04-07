@@ -237,17 +237,72 @@ void parse_and_execute(int fd) {
         }
     }
 
+    al_set(tokens, 0, handle_program_path(al_get(tokens, 0)));
+
     if (pipelineIndex == -1) {
-        command* com = command_init(al_get(tokens, 0));
-        command_populate(com, tokens, 0, al_length(tokens));
-        execute_command(com);
+        //make child process
+        pid_t child = fork();
+        if (child == -1) {
+            perror("Error forking");
+            set_exit_status(FAILURE);
+        } else if (child == 0) {
+            // inside child process
+            command* com = command_init(al_get(tokens, 0));
+            command_populate(com, tokens, 0, al_length(tokens));
+
+            if (al_length(com->redir_inputs) > 0) {
+                int in = open(al_get(com->redir_inputs, al_length(com->redir_inputs) - 1), O_RDONLY);
+                if (in == -1) {
+                    perror("Error opening input file");
+                    set_exit_status(FAILURE);
+                }
+                dup2(in, STDIN_FILENO);
+                close(in);
+            }
+            
+            if (al_length(com->redir_outputs) > 0) {
+                int out;
+                for (int i = 0; i < al_length(com->redir_outputs); i++) {
+                    out = open(al_get(com->redir_outputs, i), O_CREAT | O_WRONLY | O_TRUNC, 0640);
+                    if (out == -1) {
+                        perror("Error opening output file");
+                        set_exit_status(FAILURE);
+                    }
+                }
+                close(out);
+                dup2(out, STDOUT_FILENO);
+            }
+
+            command_destroy(com);
+            if (execv(com->program, com->arguments->data) == -1) {
+                set_exit_status(FAILURE);
+            } else {
+                set_exit_status(SUCCESS);
+            }
+        } else {
+            // inside parent process
+            wait(NULL);
+        }
     } else {
+
+        int pipefd[2]; // pipefd[0] = read, pipefd[1] = write
+        if (pipe(pipefd) == -1) {
+            perror("Error creating pipe");
+        }
+        // dup2(pipefd[0], STDIN_FILENO);
+        // dup2(pipefd[1], STDOUT_FILENO);
+        
         command* com1 = command_init(al_get(tokens, 0));
         command* com2 = command_init(al_get(tokens, 0));
         command_populate(com1, tokens, 0, pipelineIndex);
-        command_populate(com2, tokens, pipelineIndex + 1, al_length(tokens));    
+        command_populate(com2, tokens, pipelineIndex + 1, al_length(tokens));   
+
+        
+        
         execute_command(com1);
         execute_command(com2);
+        command_destroy(com1);
+        command_destroy(com2);
     }
 }
 
