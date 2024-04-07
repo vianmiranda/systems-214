@@ -109,7 +109,7 @@ void which(arraylist_t* tokens) {
 
 void exit_shell(arraylist_t* tokens) {
     if (al_length(tokens) > 0) {
-        for (int i = 0; i < al_length(tokens); i++) {
+        for (unsigned i = 0; i < al_length(tokens); i++) {
             printf("%s ", al_get(tokens, i));
         }
     }

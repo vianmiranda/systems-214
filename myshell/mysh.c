@@ -83,8 +83,8 @@ void command_populate(command* com, arraylist_t* tokens, int start, int end) {
     // NOTE: this only makes shallow copies of the strings; therefore, if any changes are 
     // made to a string in the original tokens arraylist, the same changes will be reflected
     // in its copy in com
-    memcpy(com->program, al_get(tokens, 0), strlen(al_get(tokens, 0)) + 1);
-    for (int i = 1; i < end; i++) {
+    memcpy(com->program, al_get(tokens, start), strlen(al_get(tokens, start)) + 1);
+    for (int i = start + 1; i < end; i++) {
         if (strncmp(al_get(tokens, i), "<", 1) == 0) {
             if (i + 1 < end) {
                 al_push(com->redir_inputs, al_get(tokens, i + 1));
@@ -114,6 +114,8 @@ input_stream* input_stream_init(int fd) {
     str->fd = fd;
     str->pos = 0;
     str->len = 0;
+
+    return str;
 }
 
 
@@ -197,7 +199,7 @@ int wildcard_expansion(arraylist_t* tokens, int pos) {
     if (strchr(al_get(tokens, pos), '*') == NULL) return 0;
 
     glob_t glob_result;
-    int ret = 0;
+    size_t ret = 0;
 
     // expand wildcard and add each match to token list
     // GLOB_NOCHECK: if wildcard does not match any files, this returns the original token and is added to the list
@@ -251,7 +253,7 @@ void execute_command(command* com, int pipeStatus, int pipefd) {
     
     if (al_length(com->redir_outputs) > 0) {
         int out;
-        for (int i = 0; i < al_length(com->redir_outputs); i++) {
+        for (unsigned i = 0; i < al_length(com->redir_outputs); i++) {
             out = open(al_get(com->redir_outputs, i), O_CREAT | O_WRONLY | O_TRUNC, 0640);
             if (out == -1) {
                 perror("Error opening output file");
@@ -267,7 +269,7 @@ void execute_command(command* com, int pipeStatus, int pipefd) {
     if (handle_built_in_commands(com->program, com->arguments) == 0) {
         char* args[al_length(com->arguments) + 2];
         args[0] = com->program;
-        for (int i = 1; i <= al_length(com->arguments); i++) {
+        for (unsigned i = 1; i <= al_length(com->arguments); i++) {
             args[i] = com->arguments->data[i - 1];
         }
         args[al_length(com->arguments) + 1] = NULL;
@@ -313,14 +315,14 @@ void parse_and_execute(input_stream* stream) {
     }
 
     // wildcard expansion
-    for (int i = 0; i < al_length(tokens); i++) {
+    for (unsigned i = 0; i < al_length(tokens); i++) {
         i += wildcard_expansion(tokens, i);
     }
 
     // find pipeline index. if no pipeline, just create 1 command
     // if pipeline exists, create command for before and after
     int pipelineIndex = -1;
-    for (int i = 0; i < al_length(tokens); i++) {
+    for (unsigned i = 0; i < al_length(tokens); i++) {
         if (strncmp(al_get(tokens, i), "|", 1) == 0) {
             pipelineIndex = i;
             break;

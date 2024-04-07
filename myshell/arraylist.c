@@ -79,7 +79,7 @@ void al_push(arraylist_t* L, char* item)
 
 void al_insert(arraylist_t* L, int pos, char* item)
 {
-    if (pos > L->length) {
+    if ((unsigned) pos > L->length || pos < 0) {
         fprintf(stderr, "Index out of bounds\n");
         exit(EXIT_FAILURE);
     }
@@ -101,7 +101,7 @@ void al_insert(arraylist_t* L, int pos, char* item)
     char copy[strlen(item) + 1]; // we make a copy incase item is a string later in the arraylist
     memcpy(copy, item, strlen(item) + 1);
     
-    for (int i = L->length; i > pos; i--) {
+    for (unsigned i = L->length; i > (unsigned) pos; i--) {
         if (i == L->length) {
             L->data[i] = malloc(strlen(L->data[i - 1]) + 1);
         } else {
@@ -114,7 +114,7 @@ void al_insert(arraylist_t* L, int pos, char* item)
         memcpy(L->data[i], L->data[i - 1], strlen(L->data[i - 1]) + 1);
     }
     
-    if (pos == L->length) {
+    if ((unsigned) pos == L->length) {
         L->data[pos] = malloc(sizeof(copy));
     } else {
         L->data[pos] = realloc(L->data[pos], sizeof(copy));
@@ -143,11 +143,11 @@ int al_pop(arraylist_t* L, char** dest)
 
 int al_remove(arraylist_t* L, int pos, char** dest) 
 {
-    if (L->length == 0) return 0;
+    if (L->length == 0 || pos < 0 || (unsigned) pos >= L->length) return 0;
     
     if (dest != NULL) *dest = L->data[pos];
     L->length--;
-    for (int i = pos; i < L->length; i++) {
+    for (unsigned i = pos; i < L->length; i++) {
         L->data[i] = realloc(L->data[i], strlen(L->data[i + 1]) + 1);
         if (L->data[i] == NULL) {
             fprintf(stderr, "Out of memory!\n");
@@ -162,7 +162,7 @@ int al_remove(arraylist_t* L, int pos, char** dest)
 
 void al_set(arraylist_t* L, int pos, char* item)
 {
-    if (pos >= L->length) {
+    if ((unsigned) pos >= L->length || pos < 0) {
         fprintf(stderr, "Index out of bounds\n");
         exit(EXIT_FAILURE);
     } else {
