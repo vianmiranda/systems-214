@@ -4,17 +4,16 @@
 #include <unistd.h>
 #include <errno.h>
 #include "commands.h"
-#include "arraylist.h"
 #include "status.h"
 
 #define BUFFER_SIZE 1024
 
 void cd(arraylist_t* tokens) {
-    if (tokens->length == 1) {
+    if (al_length(tokens) == 1) {
         fprintf(stderr, "Error: cd requires an argument\n");
         set_exit_status(FAILURE);
         return;
-    } else if (tokens->length > 2) {
+    } else if (al_length(tokens) > 2) {
         fprintf(stderr, "Error: cd only accepts one argument\n");
         set_exit_status(FAILURE);
         return;
@@ -87,10 +86,10 @@ char* handle_program_path(char* program) {
  * NOTE: does not print anything upon error status
 */
 void which(arraylist_t* tokens) {
-    if (tokens->length == 1) {
+    if (al_length(tokens) == 1) {
         set_exit_status(FAILURE);
         return;
-    } else if (tokens->length > 2) {
+    } else if (al_length(tokens) > 2) {
         set_exit_status(FAILURE);
         return;
     }
@@ -108,8 +107,8 @@ void which(arraylist_t* tokens) {
 }
 
 void exit_shell(arraylist_t* tokens) {
-    if (tokens->length > 1) {
-        for (int i = 1; i < tokens->length; i++) {
+    if (al_length(tokens) > 1) {
+        for (int i = 1; i < al_length(tokens); i++) {
             printf("%s ", al_get(tokens, i));
         }
     }

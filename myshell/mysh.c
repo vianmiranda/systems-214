@@ -17,26 +17,28 @@ const char* EXIT_MSG    = "Exiting mysh...\n";
 
 // tokenize the line into tokens
 arraylist_t* tokenize(char* line) {
-    char* token = strtok(line, " \t");
-    arraylist_t* list;
-    al_init(list, 10);
+    char* token = strtok(line, " ");
+    arraylist_t* list = al_init(10);
 
     while (token != NULL) {
-        int start = 0;
-        for (int i = 0; i < strlen(token); i++) {
+        int start = 0, len = strlen(token);
+        for (int i = 0; i < len && len != 1; i++) {
             if (token[i] == '<' || token[i] == '>' || token[i] == '|') {
-                char save = token[i];
-                token[i] = '\0';
-                al_push(list, &token[start]);
+                char save[2] = {token[i], '\0'};
+                if (start < i) {
+                    token[i] = '\0';
+                    al_push(list, &token[start]);
+                }
                 al_push(list, save);
                 start = i + 1;
             }
         }
-        al_push(list, &token[start]);
-        token = strtok(NULL, " \t");
+        if (start < len) al_push(list, &token[start]);
+        token = strtok(NULL, " ");
     }
     return list;
 }
+
 
 char* read_line(int fd) {
     char* line = malloc(0);
@@ -70,27 +72,27 @@ void handle_built_in_commands(arraylist_t* tokens) {
     }
 }
 
-
-
-void handle_wildcard(char* token, arraylist_t* tokens, int i) {
+void handle_wildcard(char* token, arraylist_t* tokens, int pos) {
     // wildcard token
-    glob_t glob_result;
-    // initialize glob_result
-    memset(&glob_result, 0, sizeof(glob_result));
+    glob_t* glob_result;
 
     // expand wildcard and add each match to token list
     // GLOB_NOCHECK: if wildcard does not match any files, this returns the original token and is added to the list
-    if (glob(token, GLOB_NOCHECK, NULL, &glob_result) == 0) {
-        for (int j = 0; i < glob_result.gl_pathc; j++) {
+    if (glob(token, GLOB_NOCHECK, NULL, glob_result) == 0) {
+        // remove element at pos from arraylist
+        al_remove(tokens, pos, NULL);
+        for (int j = 0; j < (int) glob_result->gl_pathc; j++) {
             // push at i + j + 1 to maintain proper order
-                al_push_at_pos(tokens, i + j + 1, glob_result.gl_pathv[j]);
+            al_put(tokens, pos + j, glob_result->gl_pathv[j]);
         }
     }
+    globfree(glob_result);   
 }
 
 
 
 void execute_command(char* command, int redirect_input, int redirect_output, char* inputFile, char* outputFile) {
+    
     // fork
     pid_t pid = fork();
     if (pid == -1) {
@@ -139,10 +141,10 @@ void interactive_mode() {
     int pipeStatus = 0;
 
 
-    printf(WELCOME_MSG);
+    printf("%s\n", WELCOME_MSG);
 
     while (1) {
-        printf(PROMPT);
+        printf("%s\n", PROMPT);
         char* line = read_line(STDIN_FILENO);
         arraylist_t* tokens = tokenize(line);
 
@@ -168,6 +170,8 @@ void interactive_mode() {
                 // get output file
             } else if (strcmp(al_get(tokens, i), "|") == 0) {
                 // handle pipe
+                pipeStatus = 1;
+
 
             }
         }
@@ -179,19 +183,36 @@ void interactive_mode() {
 
     }
 
-    printf(EXIT_MSG);
+    printf("%s\n", EXIT_MSG);
 }
 
 
 
 int main(int argc, char** argv) {
+    // char line[] = "ls -l | wc -l";
+    // printf("%s\n", line);
+    // arraylist_t* tokens = tokenize(line);
+
+    // // print the tokens
+    // for (int i = 0; i < al_length(tokens); i++) {
+    //     printf("%s\n", al_get(tokens, i));
+    // }
+
+    // al_destroy(tokens);
+    
     int systemInput = isatty(STDIN_FILENO);
-    if (argc == 1 && systemInput == 1) {
-        // interactive
-        interactive_mode();
+
+    // argc == 1 and systemInput == 1 means interactive mode
+    // argc == 1 and systemInput == 0 means batch mode with no file provided (piping)
+    // argc == 2 means batch mode with file provided
+    if (argc == 1) {
+        if (systemInput == 1) {
+            interactive_mode();
+        } else {
+            batch_mode(STDIN_FILENO);
+        }
     } else if (argc == 2) {
-        // batch
-        int fd = systemInput == 1 ? open(argv[1], O_RDONLY) : STDIN_FILENO;
+        int fd = open(argv[1], O_RDONLY);
         batch_mode(fd);
     } else {
         fprintf(stderr, "Error: Too many arguments; Usage: mysh <batchfile>\n");

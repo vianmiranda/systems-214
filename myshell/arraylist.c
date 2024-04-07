@@ -1,22 +1,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include "arraylist.h"
 
 #ifndef DEBUG
 #define DEBUG 0
 #endif
 
-void al_init(arraylist_t* L, unsigned size)
+arraylist_t* al_init(unsigned size)
 {
+    arraylist_t* L = malloc(sizeof(arraylist_t));
     L->data = malloc(size * sizeof(char*));
     L->length = 0;
     L->capacity = size;
+
+    return L;
 }
 
 void al_destroy(arraylist_t* L)
 {
+    for (unsigned i = 0; i < L->length; i++) {
+        free(L->data[i]);
+    }
     free(L->data);
+    free(L);
 }
 
 unsigned al_length(arraylist_t* L)
@@ -50,12 +58,17 @@ void al_push(arraylist_t* L, char* item)
         if (DEBUG) printf("Resized array to %u\n", L->capacity);
     }
 
+    L->data[L->length] = malloc(strlen(item) + 1);
+    if (L->data[L->length] == NULL) {
+        fprintf(stderr, "Out of memory!\n");
+        exit(EXIT_FAILURE);
+    }
     memcpy(L->data[L->length], item, strlen(item) + 1);
     L->length++;
 }
 
 
-void al_push_at_pos(arraylist_t* L, int pos, char* item)
+void al_put(arraylist_t* L, int pos, char* item)
 {
     if (pos > L->length) {
         fprintf(stderr, "Index out of bounds\n");
@@ -77,9 +90,19 @@ void al_push_at_pos(arraylist_t* L, int pos, char* item)
     }
 
     for (int i = L->length; i > pos; i--) {
+        L->data[i] = realloc(L->data[i], strlen(L->data[i - 1]) + 1);
+        if (L->data[i] == NULL) {
+            fprintf(stderr, "Out of memory!\n");
+            exit(EXIT_FAILURE);
+        }
         L->data[i] = L->data[i - 1];
     }
-
+    
+    L->data[pos] = realloc(L->data[pos], strlen(item) + 1);
+    if (L->data[pos] == NULL) {
+        fprintf(stderr, "Out of memory!\n");
+        exit(EXIT_FAILURE);
+    }
     memcpy(L->data[pos], item, strlen(item) + 1);
     L->length++;
 }
@@ -93,7 +116,21 @@ int al_pop(arraylist_t* L, char** dest)
 
     L->length--;
     *dest = L->data[L->length];
+    free(L->data[L->length]);
 
+    return 1;
+}
 
+int al_remove(arraylist_t* L, int pos, char** dest) 
+{
+    if (L->length == 0) return 0;
+    
+    *dest = L->data[pos];
+    L->length--;
+    for (int i = pos; i < L->length; i++) {
+        L->data[i] = L->data[i + 1];
+    }
+    free(L->data[L->length]);
+    
     return 1;
 }
