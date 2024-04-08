@@ -128,10 +128,8 @@ int exit_shell(arraylist_t* tokens) {
             printf("%s ", al_get(tokens, i));
         }
         printf("\n");
+        printf("pid: %d\n\n", getpid());
     }
-    set_exit_status(SUCCESS);
-    set_exit_flag(EXIT);
-    printf("Exit status: %s\n", get_exit_status() == SUCCESS ? "SUCCESS" : "FAILURE");
-    // exit();
+    kill(getpid(), SIGTERM);
     return 0;
 }

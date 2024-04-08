@@ -218,14 +218,14 @@ arraylist_t* tokenize(char* line) {
 
 int wildcard_expansion(arraylist_t* tokens, int pos) {
     // wildcard token
-    if (strchr(al_get(tokens, pos), '*') == NULL) return 0;
+    if (strchr(al_get(tokens, pos), '*') == NULL && strchr(al_get(tokens, pos), '~') == NULL ) return 0;
 
     glob_t glob_result;
     size_t ret = 0;
 
     // expand wildcard and add each match to token list
     // GLOB_NOCHECK: if wildcard does not match any files, this returns the original token and is added to the list
-    if (glob(al_get(tokens, pos), GLOB_NOCHECK, NULL, &glob_result) == 0) {
+    if (glob(al_get(tokens, pos), GLOB_NOCHECK | GLOB_TILDE, NULL, &glob_result) == 0) {
         // remove element at pos from arraylist
         al_remove(tokens, pos, NULL);
         for (; ret < glob_result.gl_pathc; ret++) {
@@ -241,8 +241,7 @@ int wildcard_expansion(arraylist_t* tokens, int pos) {
     return ret - 1;
 }
 
-int handle_built_in_commands(char* program, arraylist_t* args, int stdin_fd) {
-    dup2(stdin_fd, STDIN_FILENO);
+int handle_built_in_commands(char* program, arraylist_t* args) {
     if (strcmp(program, "exit") == 0) {
         return exit_shell(args);
     } else if (strcmp(program, "cd") == 0) {
@@ -258,21 +257,10 @@ int handle_built_in_commands(char* program, arraylist_t* args, int stdin_fd) {
 
 
 void execute_command(command* com, int pipeStatus, int pipefd) {
-    int prevStdin = dup(STDIN_FILENO);
-
-    // Pipe before input redirection as redirection has preference
-    if (pipeStatus == PIPE_READ) dup2(pipefd, STDIN_FILENO);
-    if (al_length(com->redir_inputs) > 0) {
-        int in = open(al_get(com->redir_inputs, al_length(com->redir_inputs) - 1), O_RDONLY);
-        if (in == -1) {
-            perror("Error opening input file");
-            set_exit_status(FAILURE);
-        }
-        dup2(in, STDIN_FILENO);
-        close(in);
-    }
-
+    // Handle stdout first as it is used for built-in commands, but not stdin
     // Pipe before output redirection as redirection has preference
+    int stdOut = dup(STDOUT_FILENO);
+    int stdIn = dup(STDIN_FILENO);
     if (pipeStatus == PIPE_WRITE) dup2(pipefd, STDOUT_FILENO);
     if (al_length(com->redir_outputs) > 0) {
         int out;
@@ -286,16 +274,30 @@ void execute_command(command* com, int pipeStatus, int pipefd) {
         dup2(out, STDOUT_FILENO);
         close(out);
     }
-    
-    // printf("\nExecuting program: %s\n", com->program);
-    int builtInStatus = handle_built_in_commands(com->program, com->arguments, prevStdin);
+
+    int builtInStatus = handle_built_in_commands(com->program, com->arguments);
     if (builtInStatus == 1) {
+        // Handle stdin only if not a built-in command
+        // Pipe before input redirection as redirection has preference
+        if (pipeStatus == PIPE_READ) dup2(pipefd, STDIN_FILENO);
+        if (al_length(com->redir_inputs) > 0) {
+            int in = open(al_get(com->redir_inputs, al_length(com->redir_inputs) - 1), O_RDONLY);
+            if (in == -1) {
+                perror("Error opening input file");
+                set_exit_status(FAILURE);
+            }
+            dup2(in, STDIN_FILENO);
+            close(in);
+        }
+
         set_exit_status(SUCCESS);
         if (execv(com->program, com->arguments->data) == -1) {
             perror("Error executing command\n");
             set_exit_status(FAILURE);
         }
     }
+    dup2(stdOut, STDOUT_FILENO);
+    dup2(stdIn, STDIN_FILENO);
 }
 
 void parse_and_execute(input_stream* stream) {
@@ -325,11 +327,7 @@ void parse_and_execute(input_stream* stream) {
         } else {
             return;
         }
-    } else if (strcmp(al_get(tokens, 0), "exit") == 0) {
-        command* com = command_init(al_get(tokens, 0));
-        command_populate(com, tokens, 0, al_length(tokens));
-        exit_shell(com->arguments);
-    }
+    } 
 
     // wildcard expansion
     for (unsigned i = 0; i < al_length(tokens); i++) {
@@ -382,9 +380,16 @@ void parse_and_execute(input_stream* stream) {
                 } else {
                     set_exit_status(FAILURE);
                 }
-            } else if (WIFSIGNALED(status)) {
+            }
+            if (WIFSIGNALED(status)) {
                 // child process was terminated by a signal (ex, segfault errors, etc.)
-                set_exit_status(FAILURE);
+                if (status == SIGTERM) {
+                    set_exit_status(SUCCESS);
+                    set_exit_flag(EXIT);
+                    return;
+                } else {
+                    set_exit_status(FAILURE);
+                }
             }
         }
     } else {
@@ -423,7 +428,7 @@ void parse_and_execute(input_stream* stream) {
         } else if (child1 == 0) {
             if (err == 0) {
                 command* com1 = command_init(al_get(tokens, 0));
-                if (command_populate(com1, tokens, 0, pipelineIndex)) {
+                if (command_populate(com1, tokens, 0, pipelineIndex) == -1) {
                     command_destroy(com1);
                     return;
                 }
@@ -440,8 +445,9 @@ void parse_and_execute(input_stream* stream) {
             set_exit_status(FAILURE);
         } else if (child2 == 0) {
             command* com2 = command_init(al_get(tokens, 0));
-            if (command_populate(com2, tokens, pipelineIndex + 1, al_length(tokens))) {
+            if (command_populate(com2, tokens, pipelineIndex + 1, al_length(tokens)) == -1) {
                 command_destroy(com2);
+                set_exit_status(FAILURE);
                 return;
             }
             execute_command(com2, PIPE_READ, pipefd[0]);
@@ -452,22 +458,39 @@ void parse_and_execute(input_stream* stream) {
 
         int status1, status2;
         waitpid(child1, &status1, 0);
+        if (WIFSIGNALED(status1)) {
+            // child process was terminated by a signal (ex, segfault errors, etc.)
+            if (status1 == SIGTERM) {
+                set_exit_status(SUCCESS);
+                set_exit_flag(EXIT);
+                kill(child2, SIGTERM);
+                return;
+            } else {
+                set_exit_status(FAILURE);
+            }
+        }
+
         waitpid(child2, &status2, 0);
 
         // TODO: gets exit status of last command
-        printf("STATUS %d %d\n", status1, status2);
-        if (WIFEXITED(status1) || WIFEXITED(status2)) {
+        if (WIFEXITED(status2)) {
             // child process exited normally
             int exit_status2 = WEXITSTATUS(status2); // a number between 0 - 255, 0 = success, any other number indicates error
-            // printf("STATUS %d\n", exit_status2);
             if (exit_status2 == 0) {
                 set_exit_status(SUCCESS);
             } else {
                 set_exit_status(FAILURE);
             }
-        } else {
+        }             
+        if (WIFSIGNALED(status2)) {
             // child process was terminated by a signal (ex, segfault errors, etc.)
-            set_exit_status(FAILURE);
+            if (status2 == SIGTERM) {
+                set_exit_status(SUCCESS);
+                set_exit_flag(EXIT);
+                return;
+            } else {
+                set_exit_status(FAILURE);
+            }
         }
     }
     al_destroy(tokens);

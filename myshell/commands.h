@@ -1,3 +1,4 @@
+#include <signal.h>
 #include "arraylist.h"
 
 int cd(arraylist_t* tokens);
