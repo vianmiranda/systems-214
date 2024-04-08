@@ -66,13 +66,17 @@ void al_push(arraylist_t* L, char* item)
         L->data = temp;
         if (DEBUG) printf("Resized array to %u\n", L->capacity);
     }
-
-    L->data[L->length] = malloc(strlen(item) + 1);
-    if (L->data[L->length] == NULL) {
-        fprintf(stderr, "Out of memory!\n");
-        exit(EXIT_FAILURE);
+    
+    if (item == NULL) {
+        L->data[L->length] = NULL;
+    } else {
+        L->data[L->length] = malloc(strlen(item) + 1);
+        if (L->data[L->length] == NULL) {
+            fprintf(stderr, "Out of memory!\n");
+            exit(EXIT_FAILURE);
+        }
+        memcpy(L->data[L->length], item, strlen(item) + 1);
     }
-    memcpy(L->data[L->length], item, strlen(item) + 1);
     L->length++;
 }
 
@@ -99,7 +103,9 @@ void al_insert(arraylist_t* L, int pos, char* item)
     }
 
     char copy[strlen(item) + 1]; // we make a copy incase item is a string later in the arraylist
-    memcpy(copy, item, strlen(item) + 1);
+    if (item != NULL) {
+        memcpy(copy, item, strlen(item) + 1);
+    }
     
     for (unsigned i = L->length; i > (unsigned) pos; i--) {
         if (i == L->length) {
@@ -113,17 +119,21 @@ void al_insert(arraylist_t* L, int pos, char* item)
         }
         memcpy(L->data[i], L->data[i - 1], strlen(L->data[i - 1]) + 1);
     }
-    
-    if ((unsigned) pos == L->length) {
-        L->data[pos] = malloc(sizeof(copy));
+
+    if (item == NULL) {
+        L->data[pos] = NULL;
     } else {
-        L->data[pos] = realloc(L->data[pos], sizeof(copy));
+        if ((unsigned) pos == L->length) {
+            L->data[pos] = malloc(sizeof(copy));
+        } else {
+            L->data[pos] = realloc(L->data[pos], sizeof(copy));
+        }
+        if (L->data[pos] == NULL) {
+            fprintf(stderr, "Out of memory!\n");
+            exit(EXIT_FAILURE);
+        }
+        memcpy(L->data[pos], copy, strlen(item) + 1);
     }
-    if (L->data[pos] == NULL) {
-        fprintf(stderr, "Out of memory!\n");
-        exit(EXIT_FAILURE);
-    }
-    memcpy(L->data[pos], copy, strlen(item) + 1);
     L->length++;
 }
 
@@ -167,6 +177,11 @@ void al_set(arraylist_t* L, int pos, char* item)
         exit(EXIT_FAILURE);
     } else {
         if (item == L->data[pos]) return;
+        if (item == NULL) {
+            free(L->data[pos]);
+            L->data[pos] = NULL;
+            return;
+        }
         L->data[pos] = realloc(L->data[pos], strlen(item) + 1);
         if (L->data[pos] == NULL) {
             fprintf(stderr, "Out of memory!\n");

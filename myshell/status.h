@@ -1,4 +1,5 @@
 enum {
+    UNDEFINED,
     SUCCESS,
     FAILURE
 };

@@ -1,6 +1,6 @@
 #include "status.h"
 
-static int exitStatus = SUCCESS;
+static int exitStatus = UNDEFINED;
 
 int get_exit_status() {
     return exitStatus;

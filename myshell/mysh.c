@@ -37,18 +37,21 @@ command* command_init(char* program) {
     command* com = malloc(sizeof(command));
     if (com == NULL) {
         perror("Error allocating memory");
+        set_exit_status(FAILURE);
         return NULL;
     }
     com->program = malloc(strlen(program) + 1);
     if (com->program == NULL) {
         perror("Error allocating memory");
         free(com);
+        set_exit_status(FAILURE);
         return NULL;
     }
     com->arguments = al_init(10);
     if (com->arguments == NULL) {
         free(com);
         free(com->program);
+        set_exit_status(FAILURE);
         return NULL;
     }
     com->redir_inputs = al_init(10);    
@@ -56,6 +59,7 @@ command* command_init(char* program) {
         free(com);
         free(com->program);
         free(com->arguments);
+        set_exit_status(FAILURE);
         return NULL;
     }
     com->redir_outputs = al_init(10);
@@ -64,6 +68,7 @@ command* command_init(char* program) {
         free(com->program);
         free(com->arguments);
         free(com->redir_inputs);
+        set_exit_status(FAILURE);
         return NULL;
     }
 
@@ -84,7 +89,7 @@ void command_populate(command* com, arraylist_t* tokens, int start, int end) {
     // made to a string in the original tokens arraylist, the same changes will be reflected
     // in its copy in com
     memcpy(com->program, al_get(tokens, start), strlen(al_get(tokens, start)) + 1);
-    for (int i = start + 1; i < end; i++) {
+    for (int i = start; i < end; i++) {
         if (strncmp(al_get(tokens, i), "<", 1) == 0) {
             if (i + 1 < end) {
                 al_push(com->redir_inputs, al_get(tokens, i + 1));
@@ -107,10 +112,16 @@ void command_populate(command* com, arraylist_t* tokens, int start, int end) {
             al_push(com->arguments, al_get(tokens, i));
         }
     }
+    al_push(com->arguments, NULL);
 }
 
 input_stream* input_stream_init(int fd) {
     input_stream* str = malloc(sizeof(input_stream));
+    if (str == NULL) {
+        perror("Error allocating memory");
+        set_exit_status(FAILURE);
+        return NULL;
+    }
     str->fd = fd;
     str->pos = 0;
     str->len = 0;
@@ -131,6 +142,11 @@ char* read_line(input_stream *stream) {
 		    if (segment_start < stream->pos) {
 				int segment_length = stream->pos - segment_start;
 				line = realloc(line, line_length + segment_length + 1);
+                if (line == NULL) {
+                    perror("Error allocating memory");
+                    set_exit_status(FAILURE);
+                    return NULL;
+                }
 				memcpy(line + line_length, stream->buffer + segment_start, segment_length);
 				line_length = line_length + segment_length;
 				line[line_length] = '\0';
@@ -158,6 +174,11 @@ char* read_line(input_stream *stream) {
 		    if (stream->buffer[stream->pos] == '\n') {
 				int segment_length = stream->pos - segment_start;
 				line = realloc(line, line_length + segment_length + 1);
+                if (line == NULL) {
+                    perror("Error allocating memory");
+                    set_exit_status(FAILURE);
+                    return NULL;
+                }
 				memcpy(line + line_length, stream->buffer + segment_start, segment_length);
 				line[line_length + segment_length] = '\0';
 				stream->pos++;
@@ -267,30 +288,21 @@ void execute_command(command* com, int pipeStatus, int pipefd) {
     if (pipeStatus == PIPE_WRITE) dup2(pipefd, STDOUT_FILENO);
 
     if (handle_built_in_commands(com->program, com->arguments) == 0) {
-        char* args[al_length(com->arguments) + 2];
-        args[0] = com->program;
-        for (unsigned i = 1; i <= al_length(com->arguments); i++) {
-            args[i] = com->arguments->data[i - 1];
-        }
-        args[al_length(com->arguments) + 1] = NULL;
-
-        if (execv(com->program, args) == -1) {
-            set_exit_status(FAILURE);
+        set_exit_status(SUCCESS);
+        if (execv(com->program, com->arguments->data) == -1) {
             perror("Error executing command\n");
-        } else {
-            set_exit_status(SUCCESS);
-            printf("success\n");
+            set_exit_status(FAILURE);
         }
     }
 }
 
 void parse_and_execute(input_stream* stream) {
     char* line = read_line(stream);
-    if (line == NULL) {
+    if (line == NULL || strlen(line) == 0){
         return;
     }
     arraylist_t* tokens = tokenize(line);
-    // for (int i = 0; i < al_length(tokens); i++) {
+    // for (unsigned i = 0; i < al_length(tokens); i++) {
     //     printf("%s\n", al_get(tokens, i));
     // }
     // printf("\n");
@@ -299,14 +311,31 @@ void parse_and_execute(input_stream* stream) {
     // check for conditionals (then, else)
     if (strcmp(al_get(tokens, 0), "then") == 0) {
         // check if the previous command was successful
+        int ges = get_exit_status();
+        if (ges == FAILURE) {
+            printf("then exit status: failure\n");
+        } else if (ges == SUCCESS) {
+            printf("then exit status: success\n");
+        } else {
+            printf("then exit status: undef\n");
+        }
+        
         if (get_exit_status() == SUCCESS) {
             al_remove(tokens, 0, NULL);
         } else {
             return;
         }
-
     } else if (strcmp(al_get(tokens, 0), "else") == 0) {
         // check if the previous command was not successful            
+        int ges = get_exit_status();
+        if (ges == FAILURE) {
+            printf("then exit status: failure\n");
+        } else if (ges == SUCCESS) {
+            printf("then exit status: success\n");
+        } else {
+            printf("then exit status: undef\n");
+        }
+        
         if (get_exit_status() == FAILURE) {
             al_remove(tokens, 0, NULL);
         } else {
@@ -376,6 +405,8 @@ void parse_and_execute(input_stream* stream) {
             command_destroy(com1);
         } 
 
+        close(pipefd[1]);
+
         pid_t child2 = fork();
         if (child2 == -1) {
             perror("Error forking child2");
@@ -386,9 +417,8 @@ void parse_and_execute(input_stream* stream) {
             execute_command(com2, PIPE_READ, pipefd[0]);
             command_destroy(com2);
         }
-
+        
         close(pipefd[0]);
-        close(pipefd[1]);
 
         wait(NULL);
         wait(NULL);
@@ -407,10 +437,11 @@ void batch_mode(int fd) {
 }
 
 void interactive_mode() {
-    printf("%s\n", WELCOME_MSG);
+    printf("%s", WELCOME_MSG);
     input_stream* stream = input_stream_init(STDIN_FILENO);
     while (1) {
-        printf("%s", PROMPT);
+        printf("\n%s", PROMPT);
+        fflush(stdout);
         parse_and_execute(stream);
     }
     free(stream);
