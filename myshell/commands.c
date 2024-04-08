@@ -9,12 +9,14 @@
 #define BUFFER_SIZE 1024
 
 int cd(arraylist_t* tokens) {
-    if (al_length(tokens) == 1) {
-        fprintf(stderr, "Error: cd requires an argument\n");
+    if (al_length(tokens) < 3) { 
+        // cd is defualt arg1, NULL is default arg2
+        printf("Error: cd requires an argument\n");
         set_exit_status(FAILURE);
         return -1;
     } else if (al_length(tokens) > 3) {
-        fprintf(stderr, "Error: cd only accepts one argument\n");
+        // cd is defualt arg1, NULL is default argn
+        printf("Error: cd only accepts one argument\n");
         set_exit_status(FAILURE);
         return -1;
     }
@@ -87,10 +89,8 @@ char* handle_program_path(char* program) {
         }
     }
     // // program wasn't found, so leave path empty
-    // memset(path, 0, pathLength);
-    // return path;
-    strncpy(path, program, strlen(program) + 1);
-    return program;
+    memset(path, 0, pathLength);
+    return path;
 }
 
 /**
@@ -99,10 +99,12 @@ char* handle_program_path(char* program) {
  * NOTE: does not print anything upon error status
 */
 int which(arraylist_t* tokens) {
-    if (al_length(tokens) == 1) {
+    if (al_length(tokens) < 3) {
+        // which is defualt arg1, NULL is default arg2
         set_exit_status(FAILURE);
         return -1;
     } else if (al_length(tokens) > 3) {
+        // which is defualt arg1, NULL is default argn
         set_exit_status(FAILURE);
         return -1;
     }
