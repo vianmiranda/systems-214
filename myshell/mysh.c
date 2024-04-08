@@ -242,20 +242,17 @@ int wildcard_expansion(arraylist_t* tokens, int pos) {
 
 int handle_built_in_commands(char* program, arraylist_t* args) {
     if (strcmp(program, "exit") == 0) {
-        exit_shell(args);
-        return 1;
+        
+        return exit_shell(args);
     } else if (strcmp(program, "cd") == 0) {
-        cd(args);
-        return 1;
+        return cd(args);
     } else if (strcmp(program, "pwd") == 0) {
-        pwd();
-        return 1;
+        return pwd();
     } else if (strcmp(program, "which") == 0) {
-        which(args);
-        return 1;
+        return which(args);
     }
 
-    return 0;
+    return 1;
 }
 
 
@@ -287,13 +284,17 @@ void execute_command(command* com, int pipeStatus, int pipefd) {
     
     if (pipeStatus == PIPE_WRITE) dup2(pipefd, STDOUT_FILENO);
 
-    if (handle_built_in_commands(com->program, com->arguments) == 0) {
+    // printf("\nExecuting program: %s\n", com->program);
+    int builtInStatus = handle_built_in_commands(com->program, com->arguments);
+    if (builtInStatus == 1) {
         set_exit_status(SUCCESS);
         if (execv(com->program, com->arguments->data) == -1) {
             perror("Error executing command\n");
             set_exit_status(FAILURE);
         }
-    }
+    } else if (builtInStatus == -1) {
+        perror("Error executing built-in command\n");
+    } 
 }
 
 void parse_and_execute(input_stream* stream) {
@@ -311,15 +312,6 @@ void parse_and_execute(input_stream* stream) {
     // check for conditionals (then, else)
     if (strcmp(al_get(tokens, 0), "then") == 0) {
         // check if the previous command was successful
-        int ges = get_exit_status();
-        if (ges == FAILURE) {
-            printf("then exit status: failure\n");
-        } else if (ges == SUCCESS) {
-            printf("then exit status: success\n");
-        } else {
-            printf("then exit status: undef\n");
-        }
-        
         if (get_exit_status() == SUCCESS) {
             al_remove(tokens, 0, NULL);
         } else {
@@ -327,20 +319,15 @@ void parse_and_execute(input_stream* stream) {
         }
     } else if (strcmp(al_get(tokens, 0), "else") == 0) {
         // check if the previous command was not successful            
-        int ges = get_exit_status();
-        if (ges == FAILURE) {
-            printf("then exit status: failure\n");
-        } else if (ges == SUCCESS) {
-            printf("then exit status: success\n");
-        } else {
-            printf("then exit status: undef\n");
-        }
-        
         if (get_exit_status() == FAILURE) {
             al_remove(tokens, 0, NULL);
         } else {
             return;
         }
+    } else if (strcmp(al_get(tokens, 0), "exit") == 0) {
+        command* com = command_init(al_get(tokens, 0));
+        command_populate(com, tokens, 0, al_length(tokens));
+        exit_shell(com->arguments);
     }
 
     // wildcard expansion
@@ -376,7 +363,20 @@ void parse_and_execute(input_stream* stream) {
             command_destroy(com);
         } else {
             // inside parent process
-            wait(NULL);
+            int status;
+            waitpid(child, &status, 0);
+            if (WIFEXITED(status)) {
+                // child process exited normally
+                int exit_status = WEXITSTATUS(status); // a number between 0 - 255, 0 = success, any other number indicates error
+                if (exit_status == 0) {
+                    set_exit_status(SUCCESS);
+                } else {
+                    set_exit_status(FAILURE);
+                }
+            } else if (WIFSIGNALED(status)) {
+                // child process was terminated by a signal (ex, segfault errors, etc.)
+                set_exit_status(FAILURE);
+            }
         }
     } else {
         char* progPath1 = handle_program_path(al_get(tokens, 0));
@@ -420,8 +420,23 @@ void parse_and_execute(input_stream* stream) {
         
         close(pipefd[0]);
 
-        wait(NULL);
-        wait(NULL);
+        int status1, status2;
+        waitpid(child1, &status1, 0);
+        waitpid(child2, &status2, 0);
+
+        if (WIFEXITED(status1) && WIFEXITED(status2)) {
+            // child process exited normally
+            int exit_status1 = WEXITSTATUS(status1); // a number between 0 - 255, 0 = success, any other number indicates error
+            int exit_status2 = WEXITSTATUS(status2);
+            if (exit_status1 == 0 && exit_status2 == 0) {
+                set_exit_status(SUCCESS);
+            } else {
+                set_exit_status(FAILURE);
+            }
+        } else if (WIFSIGNALED(status1) || WIFSIGNALED(status2)) {
+            // child process was terminated by a signal (ex, segfault errors, etc.)
+            set_exit_status(FAILURE);
+        }
     }
     al_destroy(tokens);
 }
@@ -437,10 +452,10 @@ void batch_mode(int fd) {
 }
 
 void interactive_mode() {
-    printf("%s", WELCOME_MSG);
+    printf("%s\n", WELCOME_MSG);
     input_stream* stream = input_stream_init(STDIN_FILENO);
-    while (1) {
-        printf("\n%s", PROMPT);
+    while (get_exit_flag() == CONTINUE) {
+        printf("%s", PROMPT);
         fflush(stdout);
         parse_and_execute(stream);
     }

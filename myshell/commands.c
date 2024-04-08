@@ -8,50 +8,53 @@
 
 #define BUFFER_SIZE 1024
 
-void cd(arraylist_t* tokens) {
-    if (al_length(tokens) == 0) {
+int cd(arraylist_t* tokens) {
+    if (al_length(tokens) == 1) {
         fprintf(stderr, "Error: cd requires an argument\n");
         set_exit_status(FAILURE);
-        return;
-    } else if (al_length(tokens) > 1) {
+        return -1;
+    } else if (al_length(tokens) > 3) {
         fprintf(stderr, "Error: cd only accepts one argument\n");
         set_exit_status(FAILURE);
-        return;
+        return -1;
     }
-    char* path = al_get(tokens, 0);
+    char* path = al_get(tokens, 1);
     if (chdir(path) == -1) {
         perror("Error using cd");
         set_exit_status(FAILURE);
+        return -1;
     }
     set_exit_status(SUCCESS);
+    return 0;
 }
 
-void pwd() {
+int pwd() {
     char* currentWorkingDirectory = malloc(BUFFER_SIZE);
     if (currentWorkingDirectory == NULL) {
         perror("Error using pwd");
         set_exit_status(FAILURE);
-        return;
+        return -1;
     }
     size_t buffer = BUFFER_SIZE;
     while (getcwd(currentWorkingDirectory, buffer) == NULL) {
         if (errno != ERANGE) {
             perror("Error using pwd");
             set_exit_status(FAILURE);
-            return;
+            return -1;
         } else {
             buffer *= 2;
             currentWorkingDirectory = realloc(currentWorkingDirectory, buffer);
             if (currentWorkingDirectory == NULL) {
                 perror("Error using pwd");
                 set_exit_status(FAILURE);
-                return;
+                return -1;
             }
         }
     }
     printf("%s\n", currentWorkingDirectory);
     free(currentWorkingDirectory);
     set_exit_status(SUCCESS);
+    return 0;
 }
 
 char* handle_program_path(char* program) {
@@ -65,6 +68,15 @@ char* handle_program_path(char* program) {
     if (strchr(program, '/') != NULL) {
         strncpy(path, program, strlen(program) + 1);
         return path;
+    }
+
+    // check if the program is a built-in command
+    const char* builtInCommands[] = {"cd", "pwd", "which", "exit"};
+    for (int i = 0; i < (int) (sizeof(builtInCommands) / sizeof(builtInCommands[0])); i++) {
+        if (strncmp(program, builtInCommands[i], strlen(builtInCommands[i])) == 0) {
+            strncpy(path, program, strlen(program) + 1);
+            return path;
+        }
     }
 
     // handle case when there is no slash, ex. myprogram. in this case, we look through directories[] to find the program
@@ -86,33 +98,38 @@ char* handle_program_path(char* program) {
  * 
  * NOTE: does not print anything upon error status
 */
-void which(arraylist_t* tokens) {
-    if (al_length(tokens) == 0) {
+int which(arraylist_t* tokens) {
+    if (al_length(tokens) == 1) {
         set_exit_status(FAILURE);
-        return;
-    } else if (al_length(tokens) > 1) {
+        return -1;
+    } else if (al_length(tokens) > 3) {
         set_exit_status(FAILURE);
-        return;
+        return -1;
     }
 
-    char* program = al_get(tokens, 0);
+    char* program = al_get(tokens, 1);
     char* path = handle_program_path(program);
     if (strlen(program) == strlen(path) || strlen(path) == 0) {
         free(path);
         set_exit_status(FAILURE);
-        return;
+        return -1;
     } 
     printf("%s\n", path);
     free(path);
     set_exit_status(SUCCESS);
+    return 0;
 }
 
-void exit_shell(arraylist_t* tokens) {
-    if (al_length(tokens) > 0) {
-        for (unsigned i = 0; i < al_length(tokens); i++) {
+int exit_shell(arraylist_t* tokens) {
+    if (al_length(tokens) > 2) {
+        for (unsigned i = 1; i < al_length(tokens) - 1; i++) {
             printf("%s ", al_get(tokens, i));
         }
+        printf("\n");
     }
     set_exit_status(SUCCESS);
-    // exit(get_exit_status());
+    set_exit_flag(EXIT);
+    printf("Exit status: %s\n", get_exit_status() == SUCCESS ? "SUCCESS" : "FAILURE");
+    // exit();
+    return 0;
 }
