@@ -7,7 +7,7 @@ This project was created by:
 
 # MyShell Design
 
-In our 'mysh.c' file, we utilized many helper functions to handle different parts of the shell. We also used Professor Menendez's implementation of arraylist that he provided in class.
+In our 'mysh.c' file, we utilized many helper functions to handle different parts of the shell. We also used a modified version of Professor Menendez's implementation of arraylist that he provided in class.
 
 In our main function, we checked the number of provided arguments and what `isatty(STDIN_FILENO)` returns to determine what mode we are in.
   1. If there is 1 argument and `isatty(STDIN_FILENO) == 1`, we are in interactive mode
