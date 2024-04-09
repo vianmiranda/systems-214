@@ -243,18 +243,21 @@ int wildcard_expansion(arraylist_t* tokens, int pos) {
 
 int handle_built_in_commands(char* program, arraylist_t* args) {
     if (strcmp(program, "exit") == 0) {
-        return exit_shell(args);
+        exit_shell(args);
+        return 0;
     } else if (strcmp(program, "cd") == 0) {
-        return cd(args);
+        cd(args);
+        return 0;
     } else if (strcmp(program, "pwd") == 0) {
-        return pwd();
+        pwd();
+        return 0;
     } else if (strcmp(program, "which") == 0) {
-        return which(args);
+        which(args);
+        return 0;
     }
 
     return 1;
 }
-
 
 void execute_command(command* com, int pipeStatus, int pipefd) {
     // Handle stdout first as it is used for built-in commands, but not stdin
@@ -306,10 +309,6 @@ void parse_and_execute(input_stream* stream) {
         return;
     }
     arraylist_t* tokens = tokenize(line);
-    // for (unsigned i = 0; i < al_length(tokens); i++) {
-    //     printf("%s\n", al_get(tokens, i));
-    // }
-    // printf("\n");
     free(line);
 
     // check for conditionals (then, else)
@@ -318,6 +317,7 @@ void parse_and_execute(input_stream* stream) {
         if (get_exit_status() == SUCCESS) {
             al_remove(tokens, 0, NULL);
         } else {
+            al_destroy(tokens);
             return;
         }
     } else if (strcmp(al_get(tokens, 0), "else") == 0) {
@@ -325,6 +325,7 @@ void parse_and_execute(input_stream* stream) {
         if (get_exit_status() == FAILURE) {
             al_remove(tokens, 0, NULL);
         } else {
+            al_destroy(tokens);
             return;
         }
     } 
@@ -350,6 +351,18 @@ void parse_and_execute(input_stream* stream) {
         if (strlen(progPath) == 0) {
             set_exit_status(FAILURE);
             printf("%s: command not found\n", al_get(tokens, 0));
+            al_destroy(tokens);
+            free(progPath);
+            return;
+        } else if (strcmp(progPath, "cd") == 0) {
+            command* com = command_init(al_get(tokens, 0));
+            if (command_populate(com, tokens, 0, al_length(tokens)) == -1) {
+                command_destroy(com);
+            }
+            execute_command(com, NO_PIPE, 0);
+            command_destroy(com);
+            free(progPath);
+            al_destroy(tokens);
             return;
         }
         al_set(tokens, 0, progPath);
@@ -364,7 +377,7 @@ void parse_and_execute(input_stream* stream) {
             command* com = command_init(al_get(tokens, 0));
             if (command_populate(com, tokens, 0, al_length(tokens)) == -1) {
                 command_destroy(com);
-                return;
+                // return;
             }
             execute_command(com, NO_PIPE, 0);
             command_destroy(com);
@@ -386,7 +399,6 @@ void parse_and_execute(input_stream* stream) {
                 if (status == SIGTERM) {
                     set_exit_status(SUCCESS);
                     set_exit_flag(EXIT);
-                    return;
                 } else {
                     set_exit_status(FAILURE);
                 }
@@ -397,6 +409,7 @@ void parse_and_execute(input_stream* stream) {
         if (pipe(pipefd) == -1) {
             perror("Error creating pipe");
             set_exit_status(FAILURE);
+            al_destroy(tokens);
             return;
         }
 
@@ -407,6 +420,13 @@ void parse_and_execute(input_stream* stream) {
             dup2(STDOUT_FILENO, pipefd[1]);
             dup2(STDIN_FILENO, pipefd[0]);
             err = -1;
+        } else if (strcmp(progPath1, "cd") == 0) {
+            command* com = command_init(al_get(tokens, 0));
+            if (command_populate(com, tokens, 0, pipelineIndex) == -1) {
+                command_destroy(com);
+            }
+            execute_command(com, NO_PIPE, 0);
+            command_destroy(com);
         }
         al_set(tokens, 0, progPath1);
         free(progPath1);
@@ -415,6 +435,12 @@ void parse_and_execute(input_stream* stream) {
         if (strlen(progPath2) == 0) {
             set_exit_status(FAILURE);
             printf("%s: command not found\n", al_get(tokens, pipelineIndex + 1));
+            free(progPath2);
+            al_destroy(tokens);
+            return;
+        } else if (strcmp(progPath2, "cd") == 0) {
+            free(progPath2);
+            al_destroy(tokens);
             return;
         }
         al_set(tokens, pipelineIndex + 1, progPath2);
@@ -430,10 +456,11 @@ void parse_and_execute(input_stream* stream) {
                 command* com1 = command_init(al_get(tokens, 0));
                 if (command_populate(com1, tokens, 0, pipelineIndex) == -1) {
                     command_destroy(com1);
-                    return;
                 }
                 execute_command(com1, PIPE_WRITE, pipefd[1]);
                 command_destroy(com1);
+            } else {
+                exit(FAILURE);
             }
         } 
 
@@ -444,13 +471,12 @@ void parse_and_execute(input_stream* stream) {
             perror("Error forking child2");
             set_exit_status(FAILURE);
         } else if (child2 == 0) {
-            command* com2 = command_init(al_get(tokens, 0));
+            command* com2 = command_init(al_get(tokens, pipelineIndex + 1));
             if (command_populate(com2, tokens, pipelineIndex + 1, al_length(tokens)) == -1) {
                 command_destroy(com2);
-                set_exit_status(FAILURE);
-                return;
             }
-            execute_command(com2, PIPE_READ, pipefd[0]);
+            if (err == 0) execute_command(com2, PIPE_READ, pipefd[0]);
+            else execute_command(com2, NO_PIPE, 0);
             command_destroy(com2);
         }
         
@@ -464,7 +490,6 @@ void parse_and_execute(input_stream* stream) {
                 set_exit_status(SUCCESS);
                 set_exit_flag(EXIT);
                 kill(child2, SIGTERM);
-                return;
             } else {
                 set_exit_status(FAILURE);
             }
@@ -472,7 +497,6 @@ void parse_and_execute(input_stream* stream) {
 
         waitpid(child2, &status2, 0);
 
-        // TODO: gets exit status of last command
         if (WIFEXITED(status2)) {
             // child process exited normally
             int exit_status2 = WEXITSTATUS(status2); // a number between 0 - 255, 0 = success, any other number indicates error
@@ -487,7 +511,6 @@ void parse_and_execute(input_stream* stream) {
             if (status2 == SIGTERM) {
                 set_exit_status(SUCCESS);
                 set_exit_flag(EXIT);
-                return;
             } else {
                 set_exit_status(FAILURE);
             }

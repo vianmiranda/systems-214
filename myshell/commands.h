@@ -1,8 +1,8 @@
 #include <signal.h>
 #include "arraylist.h"
 
-int cd(arraylist_t* tokens);
-int pwd();
+void cd(arraylist_t* tokens);
+void pwd();
 char* handle_program_path(char* program);
-int which(arraylist_t* tokens);
-int exit_shell(arraylist_t* tokens);
+void which(arraylist_t* tokens);
+void exit_shell(arraylist_t* tokens);

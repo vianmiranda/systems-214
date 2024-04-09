@@ -8,55 +8,51 @@
 
 #define BUFFER_SIZE 1024
 
-int cd(arraylist_t* tokens) {
+void cd(arraylist_t* tokens) {
     if (al_length(tokens) < 3) { 
         // cd is defualt arg1, NULL is default arg2
         printf("Error: cd requires an argument\n");
         set_exit_status(FAILURE);
-        return -1;
+        return;
     } else if (al_length(tokens) > 3) {
         // cd is defualt arg1, NULL is default argn
         printf("Error: cd only accepts one argument\n");
         set_exit_status(FAILURE);
-        return -1;
+        return;
     }
     char* path = al_get(tokens, 1);
     if (chdir(path) == -1) {
         perror("Error using cd");
         set_exit_status(FAILURE);
-        return -1;
+        return;
     }
     set_exit_status(SUCCESS);
-    return 0;
+    return;
 }
 
-int pwd() {
+void pwd() {
     char* currentWorkingDirectory = malloc(BUFFER_SIZE);
     if (currentWorkingDirectory == NULL) {
         perror("Error using pwd");
-        set_exit_status(FAILURE);
-        return -1;
+        exit(FAILURE);
     }
     size_t buffer = BUFFER_SIZE;
     while (getcwd(currentWorkingDirectory, buffer) == NULL) {
         if (errno != ERANGE) {
             perror("Error using pwd");
-            set_exit_status(FAILURE);
-            return -1;
+            exit(FAILURE);
         } else {
             buffer *= 2;
             currentWorkingDirectory = realloc(currentWorkingDirectory, buffer);
             if (currentWorkingDirectory == NULL) {
                 perror("Error using pwd");
-                set_exit_status(FAILURE);
-                return -1;
+                exit(FAILURE);
             }
         }
     }
     printf("%s\n", currentWorkingDirectory);
     free(currentWorkingDirectory);
-    set_exit_status(SUCCESS);
-    return 0;
+    exit(SUCCESS);
 }
 
 char* handle_program_path(char* program) {
@@ -98,31 +94,27 @@ char* handle_program_path(char* program) {
  * 
  * NOTE: does not print anything upon error status
 */
-int which(arraylist_t* tokens) {
+void which(arraylist_t* tokens) {
     if (al_length(tokens) < 3) {
         // which is defualt arg1, NULL is default arg2
-        set_exit_status(FAILURE);
-        return -1;
+        exit(FAILURE);
     } else if (al_length(tokens) > 3) {
         // which is defualt arg1, NULL is default argn
-        set_exit_status(FAILURE);
-        return -1;
+        exit(FAILURE);
     }
 
     char* program = al_get(tokens, 1);
     char* path = handle_program_path(program);
     if (strlen(program) == strlen(path) || strlen(path) == 0) {
         free(path);
-        set_exit_status(FAILURE);
-        return -1;
+        exit(FAILURE);
     } 
     printf("%s\n", path);
     free(path);
-    set_exit_status(SUCCESS);
-    return 0;
+    exit(SUCCESS);
 }
 
-int exit_shell(arraylist_t* tokens) {
+void exit_shell(arraylist_t* tokens) {
     if (al_length(tokens) > 2) {
         for (unsigned i = 1; i < al_length(tokens) - 1; i++) {
             printf("%s ", al_get(tokens, i));
@@ -131,5 +123,5 @@ int exit_shell(arraylist_t* tokens) {
         printf("pid: %d\n\n", getpid());
     }
     kill(getpid(), SIGTERM);
-    return 0;
+    exit(SUCCESS);
 }
