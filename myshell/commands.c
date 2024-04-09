@@ -120,7 +120,6 @@ void exit_shell(arraylist_t* tokens) {
             printf("%s ", al_get(tokens, i));
         }
         printf("\n");
-        printf("pid: %d\n\n", getpid());
     }
     kill(getpid(), SIGTERM);
     exit(SUCCESS);
