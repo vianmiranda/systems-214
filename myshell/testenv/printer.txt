@@ -1,0 +1,11 @@
+a
+file1.txt
+file2.txt
+glob.c
+lol.txt
+myscript.sh
+output.txt
+pipelinein.txt
+printer.txt
+thing.txt
+unique.txt
